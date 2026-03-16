@@ -1,37 +1,11 @@
-"""
-nba_client.py — Warstwa komunikacji z NBA Stats API
-═══════════════════════════════════════════════════
-
-JEDNA ODPOWIEDZIALNOŚĆ: pobierz dane z NBA → zwróć jako DataFrame.
-Nic więcej. Żadnej logiki biznesowej, żadnego zapisu do bazy.
-
-DLACZEGO curl_cffi ZAMIAST requests?
-─────────────────────────────────────
-stats.nba.com używa Cloudflare/Akamai który sprawdza "TLS fingerprint"
-(sygnaturę JA3 połączenia). Python requests ma inną sygnaturę niż Chrome,
-więc serwer po cichu nie odpowiada (timeout).
-curl_cffi z impersonate="chrome110" dosłownie imituje TLS handshake Chrome
-→ serwer myśli że to prawdziwa przeglądarka → HTTP 200.
-
-DLACZEGO pandas zamiast list[dict]?
-────────────────────────────────────
-API zwraca dane w formacie:
-  {"resultSets": [{"headers": [...], "rowSet": [...]}]}
-pd.DataFrame(rows, columns=headers) tworzy tabelę od razu.
-Potem w seed.py możemy robić df.merge(), df.rename(), df[...] — wygodnie.
-"""
-
 import time
 import random
 import pandas as pd
 from curl_cffi import requests as cffi_requests
 from curl_cffi.requests.exceptions import Timeout
 
-# ── STAŁE ────────────────────────────────────────────────────────────────────
-
 URL = "https://stats.nba.com/stats/leaguegamelog"
 
-# Nagłówki HTTP które imitują Chrome — bez tego serwer odrzuci request
 HEADERS = {
     "Host": "stats.nba.com",
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/110.0 Safari/537.36",
@@ -72,9 +46,6 @@ STAT_COLS = [
 ]
 
 
-# ── FUNKCJA PUBLICZNA ─────────────────────────────────────────────────────────
-
-
 def fetch_season(season: str) -> pd.DataFrame:
     """
     Pobiera wszystkie wiersze dla danego sezonu regularnego.
@@ -95,24 +66,16 @@ def fetch_season(season: str) -> pd.DataFrame:
         "DateTo": "",
         "Direction": "ASC",
         "LeagueID": "00",
-        "PlayerOrTeam": "T",  # "T" = team-level stats (nie zawodnik)
+        "PlayerOrTeam": "T", 
         "Season": season,
         "SeasonType": "Regular Season",
         "Sorter": "DATE",
     }
 
-    # Krótka pauza przed requestem
     pause = random.uniform(2, 4)
     print(f"[CLIENT] GET stats.nba.com  season={season} ... (pauza {pause:.1f}s)")
     time.sleep(pause)
 
-    # Retry z exponential backoff — obsługuje Timeout ORAZ HTTP 500
-    #
-    # DLACZEGO oba?
-    # - Timeout: serwer nie odpowiedział w czasie → throttling
-    # - HTTP 500: serwer odpowiedział błędem → chwilowa awaria API.
-    # Oba są przejściowe i znikają po odczekaniu.
-    # Wzorzec przerw: 8s → 20s → 40s + jitter [0–5s]
     from curl_cffi.requests.exceptions import HTTPError
 
     MAX_RETRIES = 4
@@ -159,7 +122,7 @@ def fetch_season(season: str) -> pd.DataFrame:
     if not rows:
         raise RuntimeError(f"API zwróciło 0 wierszy dla sezonu {season}.")
 
-    # Zbuduj DataFrame z nagłówkami z API i wybierz tylko potrzebne kolumny
+    # Budujemy DataFrame z nagłówkami z API i wybierz tylko potrzebne kolumny
     df = pd.DataFrame(rows, columns=headers)[STAT_COLS]
 
     print(f"[CLIENT] Pobrano {len(df)} wierszy (2 per mecz).")

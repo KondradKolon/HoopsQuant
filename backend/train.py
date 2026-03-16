@@ -41,13 +41,54 @@ print(f"[TRAIN] Wczytano {len(df)} meczów × {df.shape[1]} kolumn")
 #   - matchup (historyczny bilans bezpośrednich spotkań)
 
 FEATURE_COLS = (
-    [col for col in df.columns if col.endswith("_last5")]
-    + [col for col in df.columns if col.endswith("_last10")]
-    + ["home_rest_days", "away_rest_days"]
+    [col for col in df.columns if col.endswith("_last10")]
+    # + [col for col in df.columns if col.endswith("_last5")]
+    # + ["home_rest_days", "away_rest_days"] // 
+    + ["home_elo", "away_elo","elo_diff"]
+# ) +
 )
 
 TARGET_COL = "label"
 
+"""
+LogisticRegression  0.2292  0.6609     61.40%
+LightGBM            0.2346  0.6383     60.27%
+XGBoost             0.2356  0.6368     59.03%,
+
+no rest days just elo + matchups 
+LogisticRegression  0.2184  0.7005     66.77%
+LightGBM            0.2231  0.6838     64.06%
+XGBoost             0.2224  0.6868     64.06%
+
+bez elo
+Model                                        
+LogisticRegression  0.2196  0.6956     64.84%
+LightGBM            0.2261  0.6772     62.81%
+XGBoost             0.2268  0.6747     62.72%
+
+last 5 + last 10 only 
+LogisticRegression  0.2197  0.6954     64.57%
+LightGBM            0.2253  0.6813     63.62%
+XGBoost             0.2258  0.6783     62.68%
+
+last 5 only 
+LogisticRegression  0.2250  0.6729     63.04%
+LightGBM            0.2312  0.6553     61.69%
+XGBoost             0.2318  0.6502     60.75%
+
+last 10 only 
+Model                                        
+LogisticRegression  0.2198  0.6940     64.52%
+LightGBM            0.2258  0.6799     63.35%
+XGBoost             0.2254  0.6816     63.62%
+
+last 10 + elo matchups 
+Model                                        
+LogisticRegression  0.2157  0.7083     66.14%
+LightGBM            0.2199  0.6984     65.29%
+XGBoost             0.2201  0.6991     64.88%
+
+"""
 print(f"[TRAIN] Liczba cech wejściowych: {len(FEATURE_COLS)}")
 print(f"[TRAIN] Przykłady cech: {FEATURE_COLS[:4]} ... {FEATURE_COLS[-2:]}")
 
@@ -60,18 +101,21 @@ print(f"[TRAIN] Przykłady cech: {FEATURE_COLS[:4]} ... {FEATURE_COLS[-2:]}")
 # NIE używamy shuffle=True — to dałoby look-ahead bias!
 # ─────────────────────────────────────────────────────────────────────────────
 
-SPLIT_DATE = "2024-09-01"
 
-train_df = df[df["game_date"] < SPLIT_DATE].copy()
-test_df = df[df["game_date"] >= SPLIT_DATE].copy()
+START_TRAIN_DATE = "2021-01-12"
+END_TRAIN_DATE = "2023-01-12"
+START_TEST_DATE = "2024-01-01"
+
+train_df = df[(df["game_date"] >= START_TRAIN_DATE) & (df["game_date"] < END_TRAIN_DATE)].copy()
+test_df = df[df["game_date"] >= START_TEST_DATE].copy()
 
 # Usuń wiersze gdzie forma jest NaN (pierwsze mecze w historii drużyny)
 train_df = train_df.dropna(subset=FEATURE_COLS + [TARGET_COL])
 test_df = test_df.dropna(subset=FEATURE_COLS + [TARGET_COL])
 
 print(f"\n[TRAIN] Podział temporal:")
-print(f"  Train: {len(train_df)} meczów (do {SPLIT_DATE})")
-print(f"  Test:  {len(test_df)} meczów (od {SPLIT_DATE})")
+print(f"  Train: {len(train_df)} meczów (do {END_TRAIN_DATE})")
+print(f"  Test:  {len(test_df)} meczów (od {START_TEST_DATE})")
 print(f"  Gospodarz wygrał w train: {train_df[TARGET_COL].mean():.1%}")
 print(f"  Gospodarz wygrał w test:  {test_df[TARGET_COL].mean():.1%}")
 
@@ -93,29 +137,30 @@ X_test_scaled = pd.DataFrame(
 # Każdy model będzie oceniany według:
 #   Brier Score  — im niższy tym lepiej (0.25 = losowy, 0 = idealne)
 #   ROC-AUC      — im wyższy tym lepiej (0.5 = losowy, 1.0 = idealne)
-#   Accuracy     — % trafnych predykcji (próg = 0.5)
-
+# #   Accuracy     — % trafnych predykcji (próg = 0.5)
+# LogisticRegression  0.2197  0.6982     64.12%
 models = {
-    "LogisticRegression": LogisticRegression(
-        C=1.0,
+    "LogisticRegression1": LogisticRegression(
+        C=1,
         max_iter=1000,
-        random_state=42,
-    ),
-    "LightGBM": LGBMClassifier(
-        n_estimators=200,
-        learning_rate=0.05,
-        max_depth=6,
-        random_state=42,
-        verbose=-1,
-    ),
-    "XGBoost": XGBClassifier(
-        n_estimators=200,
-        learning_rate=0.05,
-        max_depth=6,
-        random_state=42,
-        eval_metric="logloss",
-        verbosity=0,
-    ),
+        random_state=42
+    )
+    # ),
+    # "LightGBM": LGBMClassifier(
+    #     n_estimators=200,
+    #     learning_rate=0.05,
+    #     max_depth=6,
+    #     random_state=42,
+    #     verbose=-1,
+    # ),
+    # "XGBoost": XGBClassifier(
+    #     n_estimators=200,
+    #     learning_rate=0.05,
+    #     max_depth=6,
+    #     random_state=42,
+    #     eval_metric="logloss",
+    #     verbosity=0,
+    # ),
 }
 
 results = {}
@@ -129,7 +174,7 @@ for name, base_model in models.items():
 
     # Kalibracja: isotonic regression dopasowuje surowe probability → kalibrowane
     # cv=5 = 5-fold cross-validation na zbiorze treningowym
-    model = CalibratedClassifierCV(base_model, method="isotonic", cv=5)
+    model = CalibratedClassifierCV(base_model, method="isotonic", cv=10)
     model.fit(X_train_scaled, y_train)
 
     proba = model.predict_proba(X_test_scaled)[:, 1]  # P(gospodarz wygra)
