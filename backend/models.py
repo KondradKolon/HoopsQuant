@@ -1,24 +1,10 @@
-from sqlalchemy import Column, Integer, String, Float, Date, Boolean, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Float, Date, Boolean, UniqueConstraint, ForeignKey
+from sqlalchemy.orm import relationship
 from database import Base
 
 
 class Game(Base):
-    """
-    Jeden wiersz = jeden mecz NBA z pełnymi statystykami OBU drużyn.
-
-    Skąd mamy te dane?
-    ─────────────────────────────────────────────────────────────────
-    leaguegamelog zwraca ~2460 wierszy na sezon (2 wiersze na mecz).
-    W seed.py łączymy oba wiersze (home + away) po GAME_ID
-    → jeden wiersz z prefiksem home_ i away_.
-
-    Dlaczego game_id obok id?
-    ─────────────────────────────────────────────────────────────────
-    `id`      = nasz wewnętrzny klucz (auto-increment, szybki JOIN)
-    `game_id` = oficjalny ID meczu z NBA (np. "0022300001")
-              = pozwala uniknąć duplikatów przy re-seedowaniu
-    """
-
+    
     __tablename__ = "games"
 
     # ── KLUCZ GŁÓWNY ─────────────────────────────────────────────────
@@ -26,6 +12,9 @@ class Game(Base):
 
     # NBA's własne ID meczu — unikalne per sezon, używamy do dedupu
     game_id = Column(String(20), nullable=False, index=True)
+
+    # Relationship to Odds
+    odds = relationship("Odds", back_populates="game")
 
     # ── META ──────────────────────────────────────────────────────────
     game_date = Column(Date, nullable=False)
@@ -92,13 +81,12 @@ class Game(Base):
     away_plus_minus = Column(Float, nullable=True)
 
     # ── CONSTRAINT: jeden game_id per sezon ───────────────────────────
-    # Baza odrzuci INSERT jeśli ten game_id już istnieje → zero duplikatów
     __table_args__ = (UniqueConstraint("game_id", name="uq_game_id"),)
 
 
 class Player(Base):
     """
-    Zawodnik NBA. Będzie używany w późniejszych sprintach
+    Zawodnik NBA. Będzie używany w późniejszych fazach
     do analizy składów i kontuzji.
     """
 
@@ -109,3 +97,20 @@ class Player(Base):
     team_name = Column(String(50), nullable=True)
     position = Column(String(10), nullable=True)
     is_active = Column(Boolean, nullable=False)
+
+
+class Odds(Base):
+    __tablename__ = "odds"
+    id = Column(Integer, primary_key=True, index=True)
+    game_id = Column(String(20), ForeignKey("games.game_id"), nullable=False, index=True)
+    bookmaker = Column(String(50), nullable=False, index=True)
+    home_win_odds = Column(Float, nullable=True)
+    away_win_odds = Column(Float, nullable=True)
+
+    game = relationship("Game", back_populates="odds")
+
+    __table_args__ = (
+        UniqueConstraint('game_id', 'bookmaker', name='uix_game_bookmaker'),
+)
+
+

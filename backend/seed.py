@@ -1,7 +1,4 @@
 """
-seed.py — Orkestracja seedowania bazy danych
-═════════════════════════════════════════════
-
 PIPELINE:
     nba_client.fetch_season(season)      ← 2460 wierszy (2 per mecz)
           ↓
@@ -16,15 +13,6 @@ UŻYCIE:
     python seed.py 2021-22          # konkretny sezon
     python seed.py 2021-22 2022-23  # wiele sezonów
     python seed.py --reset          # wyczyść tabelę i zacznij od nowa
-
-DLACZEGO PANDAS DO MERGE?
-─────────────────────────
-API daje dwa wiersze na mecz: jeden dla drużyny z "vs." (gospodarz)
-i jeden dla drużyny z "@" (gość). Chcemy je połączyć po GAME_ID
-żeby mieć jeden wiersz z prefiksem home_ i away_.
-
-pd.merge(home, away, on="GAME_ID") = klasyczny SQL JOIN.
-To jest naturalna operacja dla pandas — 3 linijki kodu.
 """
 
 import sys
@@ -33,9 +21,7 @@ from datetime import datetime
 
 import nba_client
 from database import SessionLocal, engine
-from models import Base, Game
-
-# ── DOMYŚLNE SEZONY ────────────────────────────────────────────────────────
+from models import Base, Game, Odds, Player
 
 DEFAULT_SEASONS = ["2023-24"]
 
@@ -44,23 +30,11 @@ DEFAULT_SEASONS = ["2023-24"]
 
 
 def _merge_home_away(raw: pd.DataFrame) -> pd.DataFrame:
-    """
-    Łączy dwa wiersze na mecz w jeden wiersz z prefiksem home_ / away_.
+    
 
-    leaguegamelog rozróżnia role drużyn przez kolumnę MATCHUP:
-      "DEN vs. LAL" → DEN jest gospodarzem  (MATCHUP zawiera "vs.")
-      "LAL @ DEN"   → LAL jest gościem      (MATCHUP zawiera "@")
-
-    pd.merge(..., on="GAME_ID", suffixes=("_home", "_away")):
-      Szuka wierszy z tym samym GAME_ID w obu tabelach i skleja je.
-      Suffixes rozróżniają kolumny które mają tę samą nazwę (np. PTS → PTS_home, PTS_away).
-    """
-
-    # Filtrowanie: wiersz "vs." to perspektywa gospodarza
     home = raw[raw["MATCHUP"].str.contains(r"vs\.", regex=True)].copy()
     away = raw[raw["MATCHUP"].str.contains(r"@", regex=True)].copy()
 
-    # Złącz po GAME_ID — jeden wiersz na mecz
     merged = pd.merge(home, away, on="GAME_ID", suffixes=("_home", "_away"))
 
     print(f"[MERGE]  {len(home)} home + {len(away)} away → {len(merged)} meczy")
@@ -71,16 +45,7 @@ def _merge_home_away(raw: pd.DataFrame) -> pd.DataFrame:
 
 
 def _build_game_objects(merged: pd.DataFrame, season: str) -> list[Game]:
-    """
-    Konwertuje każdy wiersz DataFrame → obiekt Game (SQLAlchemy model).
-
-    .itertuples() jest szybszy od .iterrows() bo zwraca namedtuple.
-    Używamy .get(col, None) na wypadek gdyby kolumna nie istniała.
-
-    Dlaczego nie wrzucamy DataFrame bezpośrednio do bazy?
-    SQLAlchemy nie rozumie pandas — potrzebujemy obiektów Game.
-    Alternatywnie można użyć df.to_sql() ale tracimy walidację modelu.
-    """
+    
     games = []
 
     for row in merged.itertuples(index=False):
@@ -154,19 +119,7 @@ def _build_game_objects(merged: pd.DataFrame, season: str) -> list[Game]:
 
 
 def _save_to_db(games: list[Game], session) -> int:
-    """
-    Zapisuje NOWE mecze do bazy — bezpiecznie pomija duplikaty.
-
-    DLACZEGO nie używamy session.add_all() bez sprawdzenia?
-    Jeśli choć jeden game_id już istnieje, PostgreSQL rzuca IntegrityError
-    i całą transakcję cofa (rollback). Tracimy wszystkie nowe dane.
-
-    ROZWIĄZANIE: najpierw pobierz istniejące game_id jako set (O(1) lookup),
-    potem filtruj — wstaw tylko te których jeszcze nie ma.
-
-    Dlaczego set zamiast listy?
-    id in set → O(1). id in lista → O(n). Przy 5000+ meczach różnica jest mierzalna.
-    """
+    
     # Pobierz game_id które już są w bazie
     existing_ids = {row[0] for row in session.query(Game.game_id).all()}
 
