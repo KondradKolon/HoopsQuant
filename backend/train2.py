@@ -9,7 +9,7 @@ from sklearn.calibration import CalibratedClassifierCV
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import brier_score_loss, roc_auc_score
 from sklearn.preprocessing import StandardScaler
-
+from xgboost import XGBClassifier
 print("[TRAIN] Wczytywanie features.csv...")
 df = pd.read_csv("features.csv", parse_dates=["game_date"])
 df = df.sort_values("game_date").reset_index(drop=True)
@@ -46,6 +46,42 @@ models_to_test = {
     "LogReg_C_1.0": LogisticRegression(C=1.0, max_iter=2000, random_state=42),
     "LogReg_C_0.1": LogisticRegression(C=0.1, max_iter=2000, random_state=42),
     "LogReg_C_0.01": LogisticRegression(C=0.01, max_iter=2000, random_state=42),
+    "XGBoost_Sports_Tuned": XGBClassifier(
+    n_estimators=100,         # Fewer trees so it doesn't overthink
+    learning_rate=0.05,
+    max_depth=2,              # SUPER SHALLOW. Max 2 questions per tree!
+    subsample=0.8,            # Randomly ignore 20% of games per tree (fights overfitting)
+    colsample_bytree=0.8,     # Randomly ignore 20% of stats per tree (forces it to look at all stats, not just Elo)
+    reg_lambda=10,            # L2 Regularization (XGBoost's version of your C=0.01)
+    reg_alpha=10,             # L1 Regularization (Forces useless features to absolute zero)
+    random_state=42,
+    verbosity=0,
+)
+    # "XGBoost": XGBClassifier(
+    #     n_estimators=200,
+    #     learning_rate=0.05,
+    #     max_depth=20,
+    #     random_state=42,
+    #     eval_metric="logloss",
+    #     verbosity=0,
+    # ),
+    # "XGBoost1": XGBClassifier(
+    #     n_estimators=200,
+    #     learning_rate=0.05,
+    #     max_depth=5,
+    #     random_state=42,
+    #     eval_metric="logloss",
+    #     verbosity=0,
+    # ),
+    # "XGBoost2": XGBClassifier(
+    #     n_estimators=200,
+    #     learning_rate=0.1,
+    #     max_depth=3,
+    #     random_state=42,
+    #     eval_metric="logloss",
+    #     verbosity=0,
+    # ),
+
 }
 
 # Słownik do przechowywania średnich wyników dla każdego modelu
