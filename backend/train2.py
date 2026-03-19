@@ -7,7 +7,7 @@ import numpy as np
 import pandas as pd
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import brier_score_loss, roc_auc_score
+from sklearn.metrics import brier_score_loss, roc_auc_score, log_loss
 from sklearn.preprocessing import StandardScaler
 from xgboost import XGBClassifier
 print("[TRAIN] Wczytywanie features.csv...")
@@ -57,35 +57,12 @@ models_to_test = {
     random_state=42,
     verbosity=0,
 )
-    # "XGBoost": XGBClassifier(
-    #     n_estimators=200,
-    #     learning_rate=0.05,
-    #     max_depth=20,
-    #     random_state=42,
-    #     eval_metric="logloss",
-    #     verbosity=0,
-    # ),
-    # "XGBoost1": XGBClassifier(
-    #     n_estimators=200,
-    #     learning_rate=0.05,
-    #     max_depth=5,
-    #     random_state=42,
-    #     eval_metric="logloss",
-    #     verbosity=0,
-    # ),
-    # "XGBoost2": XGBClassifier(
-    #     n_estimators=200,
-    #     learning_rate=0.1,
-    #     max_depth=3,
-    #     random_state=42,
-    #     eval_metric="logloss",
-    #     verbosity=0,
-    # ),
+    
 
 }
 
 # Słownik do przechowywania średnich wyników dla każdego modelu
-aggregate_results = {name: {"brier": [], "auc": [], "acc": []} for name in models_to_test.keys()}
+aggregate_results = {name: {"brier": [], "auc": [], "acc": [], "log loss": []} for name in models_to_test.keys()}
 
 print("\n" + "=" * 60)
 print("ROZPOCZĘCIE WALK-FORWARD VALIDATION")
@@ -118,12 +95,13 @@ for idx, split in enumerate(SPLITS, 1):
         brier = brier_score_loss(y_test, proba)
         auc = roc_auc_score(y_test, proba)
         acc = (pred == y_test).mean()
-
+        lloss = log_loss(y_test, proba)
         aggregate_results[name]["brier"].append(brier)
         aggregate_results[name]["auc"].append(auc)
         aggregate_results[name]["acc"].append(acc)
+        aggregate_results[name]["log loss"].append(lloss)
 
-        print(f"  > {name}: Brier: {brier:.4f} | AUC: {auc:.4f} | Acc: {acc:.2%}")
+        print(f"  > {name}: Brier: {brier:.4f} | AUC: {auc:.4f} | Acc: {acc:.2%} | Log Loss: {lloss:.4f} ")
 
 # ─────────────────────────────────────────────────────────────────────────────
 # KROK 4: PODSUMOWANIE (ŚREDNIE Z FOLDÓW)
@@ -137,12 +115,13 @@ for name, metrics in aggregate_results.items():
     avg_brier = np.mean(metrics["brier"])
     avg_auc = np.mean(metrics["auc"])
     avg_acc = np.mean(metrics["acc"])
-    
+    avg_llos = np.mean(metrics["log loss"])
     summary_rows.append({
         "Model": name, 
         "Brier ↓": avg_brier, 
         "AUC ↑": avg_auc, 
-        "Accuracy ↑": avg_acc
+        "Accuracy ↑": avg_acc,
+        "Log Loss": avg_llos
     })
 
 summary_df = pd.DataFrame(summary_rows).set_index("Model")
