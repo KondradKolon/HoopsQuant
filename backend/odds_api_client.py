@@ -49,7 +49,7 @@ TEAM_ABBREVIATIONS = {
 load_dotenv()
 API_KEY = os.getenv("ODDS_API_KEY")
 BASE_URL = "https://api.odds-api.io/v3"
-BOOKMAKERS_LIST = ["Betclic PL", "Superbet"]  # The ones we want to isolate
+BOOKMAKERS_LIST = ["Polymarket", "Superbet"]  # The ones we want to isolate
 
 
 def _norm_name(value: str) -> str:

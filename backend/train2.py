@@ -86,7 +86,7 @@ for idx, split in enumerate(SPLITS, 1):
     X_test_scaled = pd.DataFrame(scaler.transform(X_test), columns=FEATURE_COLS)
 
     for name, base_model in models_to_test.items():
-        model = CalibratedClassifierCV(base_model, method="isotonic", cv=5) # cv=5 wystarczy, przyspieszy pętlę
+        model = CalibratedClassifierCV(base_model, method="sigmoid", cv=5) # cv=5 wystarczy, przyspieszy pętlę
         model.fit(X_train_scaled, y_train)
 
         proba = model.predict_proba(X_test_scaled)[:, 1]
@@ -147,7 +147,7 @@ final_scaler = StandardScaler()
 X_final_scaled = pd.DataFrame(final_scaler.fit_transform(X_final), columns=FEATURE_COLS)
 
 final_base_model = LogisticRegression(C=best_C, max_iter=2000, random_state=42)
-final_model = CalibratedClassifierCV(final_base_model, method="isotonic", cv=10)
+final_model = CalibratedClassifierCV(final_base_model, method="sigmoid", cv=10)
 final_model.fit(X_final_scaled, y_final)
 
 # Wyciąganie wag (Feature Importance)
