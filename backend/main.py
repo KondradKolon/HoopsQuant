@@ -4,20 +4,13 @@ from pydantic import BaseModel
 from typing import Optional
 from datetime import date
 
-from database import engine, SessionLocal
+from src.db.database.database import engine, SessionLocal
 import models
 
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="HoopsQuant API", version="0.2.0")
 
-
-# ── PYDANTIC SCHEMA ──────────────────────────────────────────────────────────
-# Pydantic definiuje kształt JSON który wychodzi z API.
-# Oddzielony od modelu SQLAlchemy — możemy zwracać mniej lub więcej pól
-# niż przechowujemy w bazie, niezależnie od siebie.
-# model_config from_attributes: pozwala skonstruować ten model
-# bezpośrednio z obiektu SQLAlchemy (bez ręcznego mapowania).
 
 
 class GameResponse(BaseModel):
@@ -59,11 +52,6 @@ class GameResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-# ── DEPENDENCY: sesja bazy danych ────────────────────────────────────────────
-# FastAPI woła get_db() automatycznie dla każdego requestu.
-# yield = "daj sesję, po zakończeniu requestu wróć tu i zamknij"
-
-
 def get_db():
     db = SessionLocal()
     try:
@@ -71,8 +59,6 @@ def get_db():
     finally:
         db.close()
 
-
-# ── ENDPOINTS ────────────────────────────────────────────────────────────────
 
 
 @app.get("/")

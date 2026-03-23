@@ -65,7 +65,7 @@ if [[ -n "$FALLBACK_START" ]]; then
   range_args+=(--fallback-start "$FALLBACK_START")
 fi
 
-range_out=$($PYTHON_BIN get_odds_fetch_range.py "${range_args[@]}" | tr -d '\r')
+range_out=$($PYTHON_BIN -m scripts.get_odds_fetch_range "${range_args[@]}" | tr -d '\r')
 
 START_ISO=$(printf '%s\n' "$range_out" | awk -F= '/^START_ISO=/{print $2; exit}')
 END_ISO=$(printf '%s\n' "$range_out" | awk -F= '/^END_ISO=/{print $2; exit}')
@@ -93,4 +93,4 @@ if [[ "$DEBUG" -eq 1 ]]; then
   odds_args+=(--debug)
 fi
 
-$PYTHON_BIN odds_api_client.py "${odds_args[@]}"
+$PYTHON_BIN -m src.clients.odds_api_client "${odds_args[@]}"
