@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, Date, Boolean, UniqueConstraint, ForeignKey, DateTime
+from sqlalchemy import Column, Integer, String, Float, Date, Boolean, UniqueConstraint, ForeignKey, DateTime, Index
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.db.database import Base
@@ -159,4 +159,92 @@ class Prediction(Base):
     __table_args__ = (
         UniqueConstraint('game_id', 'model_name', name='uix_game_model'),
 )
+
+
+class UserPick(Base):
+    """Track user's placed bets/picks"""
+    __tablename__ = "user_picks"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    game_id = Column(String(20), ForeignKey("games.game_id"), nullable=False)
+    
+    # Pick details
+    pick_team = Column(String(10), nullable=False)  # "LAL" or "BOS"
+    pick_type = Column(String(20), nullable=False)  # "moneyline", "spread", "total"
+    odds = Column(Float, nullable=False)            # -110, +150
+    stake = Column(Float, nullable=False)           # $100
+    
+    # Status
+    placed_at = Column(DateTime, default=datetime.utcnow)
+    result = Column(String(10), nullable=True)      # "WIN", "LOSS", "PENDING"
+    profit = Column(Float, nullable=True)           # +$90 or -$100
+    
+    # Metadata
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    user = relationship("User")
+    game = relationship("Game")
+    
+    __table_args__ = (
+        UniqueConstraint('user_id', 'game_id', 'pick_type', name='uq_user_game_pick'),
+        Index('idx_user_picks', 'user_id', 'result'),
+    )
+
+
+class OddsHistory(Base):
+    """Track historical odds for line movement tracking"""
+    __tablename__ = "odds_history"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    game_id = Column(String(20), ForeignKey("games.game_id"), nullable=False, index=True)
+    bookmaker = Column(String(50), nullable=False)
+    
+    # Odds at this point in time
+    home_odds = Column(Float, nullable=True)        # -110
+    away_odds = Column(Float, nullable=True)        # +110
+    spread = Column(Float, nullable=True)           # -2.5
+    total = Column(Float, nullable=True)            # 218.5
+    
+    # When this was recorded
+    timestamp = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    game = relationship("Game")
+    
+    __table_args__ = (
+        Index('idx_game_bookmaker_timestamp', 'game_id', 'bookmaker', 'timestamp'),
+    )
+
+
+class UserAlert(Base):
+    """User's notification preferences"""
+    __tablename__ = "user_alerts"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, unique=True)
+    
+    # Alert types
+    alerts_arbitrage = Column(Boolean, default=True)      # Arb opportunities
+    alerts_sharp = Column(Boolean, default=True)          # Sharp money detected
+    alerts_picks = Column(Boolean, default=True)          # New picks
+    alerts_lineup = Column(Boolean, default=False)        # Player injuries/lineup
+    
+    # Filters
+    min_roi = Column(Float, default=0.5)                  # Alert if ROI > 0.5%
+    min_confidence = Column(Float, default=0.55)          # Alert if confidence > 55%
+    
+    # Notification channels
+    email = Column(Boolean, default=True)
+    sms = Column(Boolean, default=False)
+    push = Column(Boolean, default=False)
+    
+    # Contact info
+    phone_number = Column(String(20), nullable=True)
+    
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    user = relationship("User")
 
