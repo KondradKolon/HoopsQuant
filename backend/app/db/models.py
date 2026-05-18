@@ -1,6 +1,7 @@
-from sqlalchemy import Column, Integer, String, Float, Date, Boolean, UniqueConstraint, ForeignKey
+from sqlalchemy import Column, Integer, String, Float, Date, Boolean, UniqueConstraint, ForeignKey, DateTime
 from sqlalchemy.orm import relationship
-from database import Base
+from datetime import datetime
+from app.db.database import Base
 
 
 class Game(Base):
@@ -113,4 +114,49 @@ class Odds(Base):
         UniqueConstraint('game_id', 'bookmaker', name='uix_game_bookmaker'),
 )
 
+
+class User(Base):
+    """User accounts for authentication"""
+    __tablename__ = "users"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    supabase_id = Column(String(100), unique=True, index=True, nullable=True)
+    email = Column(String(100), unique=True, index=True, nullable=False)
+    name = Column(String(100), nullable=True)
+    provider = Column(String(50), nullable=True)  # google, github, email
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    watchlist = relationship("Watchlist", back_populates="user")
+
+
+class Watchlist(Base):
+    """User's saved games"""
+    __tablename__ = "watchlist"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    game_id = Column(String(20), ForeignKey("games.game_id"), nullable=False)
+    added_at = Column(DateTime, default=datetime.utcnow)
+    
+    user = relationship("User", back_populates="watchlist")
+    game = relationship("Game")
+
+
+class Prediction(Base):
+    """ML model predictions for games"""
+    __tablename__ = "predictions"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    game_id = Column(String(20), ForeignKey("games.game_id"), nullable=False, index=True)
+    model_name = Column(String(50), nullable=False)
+    home_win_prob = Column(Float, nullable=False)
+    away_win_prob = Column(Float, nullable=False)
+    confidence = Column(Float, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    game = relationship("Game")
+    
+    __table_args__ = (
+        UniqueConstraint('game_id', 'model_name', name='uix_game_model'),
+)
 

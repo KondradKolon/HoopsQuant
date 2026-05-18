@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 from sqlalchemy import text
-from database import engine
+from src.db.database.database import engine
 
 print("[FEAT] Wczytywanie meczów z bazy...")
 query = text("""
