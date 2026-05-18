@@ -5,6 +5,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.db.database import engine
 from app.db import models
+from app.api.routes import games, arbitrage, watchlist, dashboard
+from jobs.scheduler import start_scheduler, stop_scheduler
+import logging
+
+# Setup logging
+logger = logging.getLogger(__name__)
 
 # Create database tables
 models.Base.metadata.create_all(bind=engine)
@@ -48,5 +54,28 @@ async def health_check():
     return {"status": "ok", "service": "hoopsquant-api"}
 
 
-# Routes will be included here in next steps
-# from app.api.routes import games, predictions, arbitrage, watchlist
+# Include routers
+app.include_router(games.router)
+app.include_router(arbitrage.router)
+app.include_router(watchlist.router)
+app.include_router(dashboard.router)
+
+
+# Scheduler startup and shutdown hooks
+@app.on_event("startup")
+async def startup_event():
+    """Start scheduler when API starts"""
+    logger.info("🚀 Starting HoopsQuant API...")
+    try:
+        start_scheduler()
+    except Exception as e:
+        logger.warning(f"⚠️  Scheduler startup warning: {e}")
+        # Don't fail API startup if scheduler fails
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    """Stop scheduler when API shuts down"""
+    logger.info("🛑 Shutting down HoopsQuant API...")
+    stop_scheduler()
+
