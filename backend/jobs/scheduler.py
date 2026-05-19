@@ -8,6 +8,7 @@ from apscheduler.executors.pool import ThreadPoolExecutor
 import logging
 import sys
 from pathlib import Path
+from datetime import datetime
 
 # Setup logging
 logging.basicConfig(
@@ -62,8 +63,8 @@ def start_scheduler():
             name='Fetch Odds',
             misfire_grace_time=600,  # 10 minutes grace period
             kwargs={
-                'start_date': None,
-                'end_date': None,
+                'start_iso': datetime.now().date().isoformat(),
+                'end_iso': datetime.now().date().isoformat(),
                 'max_games': 50
             }
         )
@@ -95,8 +96,8 @@ def start_scheduler():
         logger.info("✅ Scheduler started successfully")
         
     except Exception as e:
-        logger.error(f"❌ Failed to start scheduler: {e}")
-        raise
+        logger.warning(f"⚠️  Scheduler setup warning: {e}. App will continue without background jobs.")
+        # Don't re-raise - let app continue even if scheduler fails
 
 
 def stop_scheduler():
