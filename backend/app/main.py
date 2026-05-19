@@ -8,12 +8,33 @@ from app.db import models
 from app.api.routes import games, arbitrage, watchlist, dashboard
 from jobs.scheduler import start_scheduler, stop_scheduler
 import logging
+import time
 
 # Setup logging
 logger = logging.getLogger(__name__)
 
-# Create database tables
-models.Base.metadata.create_all(bind=engine)
+# Initialize database tables with retry logic (non-blocking)
+def init_db_with_retry(max_retries=3, initial_delay=1):
+    """Initialize database tables with exponential backoff retry logic"""
+    for attempt in range(max_retries):
+        try:
+            models.Base.metadata.create_all(bind=engine)
+            logger.info("✓ Database tables initialized successfully")
+            return True
+        except Exception as e:
+            if attempt < max_retries - 1:
+                delay = initial_delay * (2 ** attempt)
+                logger.warning(f"⚠️  Database init attempt {attempt + 1} failed: {e}. Retrying in {delay}s...")
+                time.sleep(delay)
+            else:
+                logger.warning(f"⚠️  Database initialization failed after {max_retries} attempts: {e}. API will start without DB tables.")
+                return False
+
+# Try to initialize database, but don't block app startup
+try:
+    init_db_with_retry()
+except Exception as e:
+    logger.warning(f"⚠️  Database initialization error: {e}. API will function with limited features until DB is available.")
 
 # Create FastAPI app
 app = FastAPI(
