@@ -1,7 +1,7 @@
 """
 Games API Routes
 """
-from fastapi import APIRouter, Query, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.db.models import Game, Prediction
@@ -16,26 +16,19 @@ async def get_upcoming_games(
     season: str = Query("2024-25"),
     db: Session = Depends(get_db)
 ):
-    """
-    Get upcoming (not yet played) games with predictions
-    
-    - **limit**: Maximum number of games to return (max 100)
-    - **season**: NBA season (e.g., "2024-25")
-    """
+    """Get upcoming (not yet played) games with predictions"""
     try:
-        # Get games without scores (not yet played)
         games = db.query(Game).filter(
             Game.home_score == None,
             Game.season == season
         ).limit(limit).all()
-        
+
         result = []
         for game in games:
-            # Get prediction for this game
             pred = db.query(Prediction).filter(
                 Prediction.game_id == game.game_id
             ).first()
-            
+
             result.append({
                 "game_id": game.game_id,
                 "date": game.game_date.isoformat() if game.game_date else None,
@@ -48,10 +41,15 @@ async def get_upcoming_games(
                     "model": pred.model_name if pred else None
                 } if pred else None
             })
-        
+
         return result
+    except HTTPException:
+        raise
     except Exception as e:
-        return {"error": str(e)}
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch upcoming games: {str(e)}"
+        )
 
 
 @router.get("/{game_id}/prediction")
@@ -59,20 +57,19 @@ async def get_game_prediction(
     game_id: str,
     db: Session = Depends(get_db)
 ):
-    """
-    Get detailed prediction for a specific game
-    
-    - **game_id**: NBA game ID
-    """
+    """Get detailed prediction for a specific game"""
     try:
         game = db.query(Game).filter(Game.game_id == game_id).first()
         if not game:
-            return {"error": "Game not found"}
-        
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Game not found"
+            )
+
         pred = db.query(Prediction).filter(
             Prediction.game_id == game_id
         ).first()
-        
+
         return {
             "game": {
                 "game_id": game.game_id,
@@ -91,8 +88,13 @@ async def get_game_prediction(
                 "created_at": pred.created_at.isoformat() if pred.created_at else None
             } if pred else None
         }
+    except HTTPException:
+        raise
     except Exception as e:
-        return {"error": str(e)}
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch game prediction: {str(e)}"
+        )
 
 
 @router.get("")
@@ -101,17 +103,12 @@ async def get_games(
     limit: int = Query(20, le=100, ge=1),
     db: Session = Depends(get_db)
 ):
-    """
-    Get games for a specific season
-    
-    - **season**: NBA season (e.g., "2024-25")
-    - **limit**: Maximum number of games (max 100)
-    """
+    """Get games for a specific season"""
     try:
         games = db.query(Game).filter(
             Game.season == season
         ).limit(limit).all()
-        
+
         return [
             {
                 "game_id": g.game_id,
@@ -125,7 +122,10 @@ async def get_games(
             for g in games
         ]
     except Exception as e:
-        return {"error": str(e)}
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to fetch games: {str(e)}"
+        )
 
 
 @router.get("/count")
@@ -133,14 +133,12 @@ async def count_games(
     season: str = Query("2024-25"),
     db: Session = Depends(get_db)
 ):
-    """
-    Get count of games in database for a season
-    """
+    """Get count of games in database for a season"""
     try:
         count = db.query(Game).filter(Game.season == season).count()
-        return {
-            "season": season,
-            "total_games": count
-        }
+        return {"season": season, "total_games": count}
     except Exception as e:
-        return {"error": str(e)}
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to count games: {str(e)}"
+        )
