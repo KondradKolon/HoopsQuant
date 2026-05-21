@@ -81,6 +81,14 @@ const getMockResponse = (url?: string) => {
   return null
 }
 
+const getMockPostResponse = (url?: string, data?: any) => {
+  if (!url) return null
+  if (url.includes('/dashboard/picks')) {
+    return { id: Math.floor(Math.random() * 10000), message: 'Pick saved', status: 'PENDING' }
+  }
+  return null
+}
+
 apiClient.interceptors.request.use((config) => {
   const token = typeof window !== 'undefined' ? localStorage.getItem('sb-token') : null
   if (token) {
@@ -88,7 +96,8 @@ apiClient.interceptors.request.use((config) => {
   }
 
   if (USE_MOCK_API && typeof window !== 'undefined') {
-    const data = getMockResponse(config.url)
+    const isPost = (config.method || 'get').toLowerCase() === 'post'
+    const data = isPost ? getMockPostResponse(config.url, config.data) : getMockResponse(config.url)
     if (data) {
       config.adapter = async () => ({
         data,
