@@ -7,6 +7,16 @@ import { createClient } from '@/lib/supabase/client'
 import apiClient from '@/lib/api'
 import Link from 'next/link'
 
+interface Prediction {
+  home_win_prob: number
+  away_win_prob: number
+  confidence: number
+  min_home_odds_decimal: number
+  min_away_odds_decimal: number
+  min_home_odds_american: number
+  min_away_odds_american: number
+}
+
 interface Game {
   game_id: string
   home_team: string
@@ -14,12 +24,10 @@ interface Game {
   game_date: string
   home_score?: number
   away_score?: number
-  home_win_prob?: number
-  away_win_prob?: number
+  prediction?: Prediction
   best_odds?: {
-    bookmaker: string
-    home_win_odds: number
-    away_win_odds: number
+    home: number
+    away: number
   }
 }
 
@@ -50,7 +58,7 @@ export default function DashboardPage() {
           Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
         },
       })
-      setGames(response.data.games || [])
+      setGames(Array.isArray(response.data) ? response.data : response.data.games || [])
       setError(null)
     } catch (err) {
       console.error('Error fetching games:', err)
@@ -67,9 +75,9 @@ export default function DashboardPage() {
 
   if (authLoading || (user && loading)) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-900">
+      <div className="flex items-center justify-center min-h-screen quant-grid">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4" />
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500 mx-auto mb-4" />
           <p className="text-gray-400">Loading your dashboard...</p>
         </div>
       </div>
@@ -77,14 +85,14 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900">
+    <div className="min-h-screen quant-grid">
       {/* Header */}
       <header className="bg-slate-800 border-b border-slate-700 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
           <div className="flex items-center gap-8">
             <h1 className="text-2xl font-bold text-white">HoopsQuant</h1>
             <nav className="flex gap-6">
-              <Link href="/dashboard" className="text-white hover:text-blue-400 font-medium">
+              <Link href="/dashboard" className="text-emerald-400 font-medium">
                 Dashboard
               </Link>
               <Link href="/arbitrage" className="text-gray-400 hover:text-white font-medium">
@@ -124,7 +132,7 @@ export default function DashboardPage() {
         {/* Games Grid */}
         {loading ? (
           <div className="text-center py-12">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500" />
           </div>
         ) : games.length === 0 ? (
           <div className="bg-slate-800 rounded-lg p-8 text-center border border-slate-700">
@@ -135,7 +143,7 @@ export default function DashboardPage() {
             {games.map((game) => (
               <div
                 key={game.game_id}
-                className="bg-slate-800 rounded-lg border border-slate-700 p-6 hover:border-blue-500 transition"
+                className="bg-slate-800 rounded-lg border border-slate-700 p-6 hover:border-emerald-500 transition"
               >
                 <div className="flex justify-between items-start mb-4">
                   <div className="flex items-center gap-4">
@@ -152,21 +160,29 @@ export default function DashboardPage() {
                   </div>
 
                   {/* Prediction */}
-                  {game.home_win_prob && (
-                    <div className="bg-blue-900 rounded-lg p-4 text-right">
+                  {game.prediction && (
+                    <div className="bg-emerald-900/40 rounded-lg p-4 text-right border border-emerald-800/30">
                       <div className="text-sm text-gray-300 mb-1">Win Probability</div>
-                      <div className="flex gap-4">
+                      <div className="flex gap-4 mb-3">
                         <div>
-                          <div className="text-xl font-bold text-blue-400">
-                            {(game.home_win_prob * 100).toFixed(1)}%
+                          <div className="text-xl font-bold text-emerald-400">
+                            {(game.prediction.home_win_prob * 100).toFixed(1)}%
                           </div>
                           <div className="text-xs text-gray-400">{game.home_team}</div>
                         </div>
                         <div>
-                          <div className="text-xl font-bold text-blue-400">
-                            {((1 - game.home_win_prob) * 100).toFixed(1)}%
+                          <div className="text-xl font-bold text-emerald-400">
+                            {(game.prediction.away_win_prob * 100).toFixed(1)}%
                           </div>
                           <div className="text-xs text-gray-400">{game.away_team}</div>
+                        </div>
+                      </div>
+                      <div className="border-t border-emerald-800/30 pt-2 text-xs space-y-1">
+                        <div className="text-emerald-300">
+                          +EV if {game.home_team} &gt; {game.prediction.min_home_odds_decimal}x ({game.prediction.min_home_odds_american})
+                        </div>
+                        <div className="text-emerald-300">
+                          +EV if {game.away_team} &gt; {game.prediction.min_away_odds_decimal}x ({game.prediction.min_away_odds_american})
                         </div>
                       </div>
                     </div>
@@ -187,12 +203,12 @@ export default function DashboardPage() {
                     </div>
                   </div>
 
-                  {game.best_odds && (
+                  {game.best_odds && game.best_odds.home && (
                     <div>
-                      <div className="text-sm text-gray-400">Best Odds ({game.best_odds.bookmaker})</div>
+                      <div className="text-sm text-gray-400">Best Odds</div>
                       <div className="flex gap-2">
-                        <div className="text-green-400 font-semibold">{game.best_odds.home_win_odds}</div>
-                        <div className="text-red-400 font-semibold">{game.best_odds.away_win_odds}</div>
+                        <div className="text-green-400 font-semibold">{game.best_odds.home.toFixed(2)}x</div>
+                        <div className="text-red-400 font-semibold">{game.best_odds.away.toFixed(2)}x</div>
                       </div>
                     </div>
                   )}
@@ -200,7 +216,7 @@ export default function DashboardPage() {
 
                 {/* Action Button */}
                 <div className="mt-4 flex gap-2">
-                  <button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg transition font-semibold">
+                  <button className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white py-2 rounded-lg transition font-semibold">
                     Place Pick
                   </button>
                   <button className="flex-1 bg-slate-700 hover:bg-slate-600 text-gray-300 py-2 rounded-lg transition">

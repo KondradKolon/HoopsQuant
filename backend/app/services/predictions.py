@@ -31,8 +31,8 @@ def load_model():
     if _model is not None:
         return _model, _scaler, _feature_cols
     
-    # Model jest w głównym katalogu backend/
-    model_dir = Path(__file__).parent.parent.parent
+    # Model jest w katalogu backend/models/
+    model_dir = Path(__file__).parent.parent.parent / "models"
     
     try:
         _model = joblib.load(model_dir / "model.pkl")
@@ -173,16 +173,60 @@ def generate_features_for_game(
     Generuje cechy (features) dla meczu bazując na historii
     """
     
+    TEAM_MAP = {
+        "Oklahoma C": "OKC", "San Antoni": "SAS",
+        "New York K": "NYK", "Cleveland ": "CLE",
+    }
+
+    def _compute_derived(df):
+        for prefix in ("home_", "away_"):
+            fgm = df[f"{prefix}fgm"]
+            fga = df[f"{prefix}fga"]
+            fg3m = df[f"{prefix}fg3m"]
+            ftm = df[f"{prefix}ftm"]
+            fta = df[f"{prefix}fta"]
+            tov = df[f"{prefix}tov"]
+            oreb = df[f"{prefix}oreb"]
+            pts = 2 * fgm + fg3m + ftm
+            poss = fga + 0.44 * fta - oreb + tov
+            df[f"{prefix}pts"] = pts
+            df[f"{prefix}efg"] = (fgm + 0.5 * fg3m) / fga.replace(0, np.nan)
+            df[f"{prefix}ts"] = pts / (2 * (fga + 0.44 * fta)).replace(0, np.nan)
+            df[f"{prefix}tov_rate"] = tov / (fga + 0.44 * fta + tov).replace(0, np.nan)
+            df[f"{prefix}ortg"] = pts / poss.replace(0, np.nan) * 100
+            df[f"{prefix}poss"] = poss
+        opp_prefix = {"home_": "away_", "away_": "home_"}
+        for prefix in ("home_", "away_"):
+            opp = opp_prefix[prefix]
+            df[f"{prefix}drtg"] = df[f"{opp}pts"] / df[f"{opp}poss"].replace(0, np.nan) * 100
+            df[f"{prefix}pace"] = (df[f"{prefix}poss"] + df[f"{opp}poss"]) / 2
+        return df
+
     try:
+        # Mapowanie nazw drużyn z Odds API na kody NBA
+        home_team = TEAM_MAP.get(home_team, home_team)
+        away_team = TEAM_MAP.get(away_team, away_team)
+
+        # Normalizacja game_date do pd.Timestamp
+        if not isinstance(game_date, pd.Timestamp):
+            game_date = pd.Timestamp(game_date)
+        game_date_str = game_date.strftime("%Y-%m-%d")
+
         # Wczytujemy wszystkie mecze z bazy (do cachowania)
         query = text("SELECT * FROM games WHERE game_date <= :date ORDER BY game_date ASC")
-        df_games = pd.read_sql(query, con=session.connection(), params={"date": game_date})
+        df_games = pd.read_sql(query, con=session.connection(), params={"date": game_date_str})
         
         if df_games.empty:
             logger.error(f"Brak meczów w bazie dla {home_team} vs {away_team}")
             return None
         
         df_games["game_date"] = pd.to_datetime(df_games["game_date"])
+        # Tylko zakończone mecze (mają wyniki i statystyki)
+        df_games = df_games[df_games["home_score"].notna()].copy()
+        if df_games.empty:
+            logger.warning("Brak zakończonych meczów w bazie")
+            return None
+        df_games = _compute_derived(df_games)
         
         # Obliczamy cechy
         features = {}
@@ -209,15 +253,36 @@ def generate_features_for_game(
         return None
 
 
+def prob_to_min_decimal(prob: float) -> float:
+    """Minimum decimal odds needed for positive EV given a probability"""
+    if prob <= 0 or prob >= 1:
+        return 0.0
+    return round(1 / prob, 2)
+
+
+def prob_to_min_american(prob: float) -> int:
+    """Minimum American odds needed for positive EV"""
+    dec = prob_to_min_decimal(prob)
+    if dec <= 0:
+        return 0
+    if dec >= 2:
+        return int(round((dec - 1) * 100))
+    return int(round(-100 / (dec - 1)))
+
+
 def predict_game(features: dict, feature_cols: list) -> dict:
     """
     Generuje predykcję dla gry używając modelu ML
     
     Returns:
         {
-            "home_win_prob": float,  # Prawd. wygranej gospodarza (0-1)
-            "away_win_prob": float,  # Prawd. wygranej gości (0-1)
-            "confidence": float      # Maksymalna z dwóch prawd. (0-1)
+            "home_win_prob": float,
+            "away_win_prob": float,
+            "confidence": float,
+            "min_home_odds_decimal": float,
+            "min_away_odds_decimal": float,
+            "min_home_odds_american": int,
+            "min_away_odds_american": int,
         }
     """
     
@@ -230,7 +295,11 @@ def predict_game(features: dict, feature_cols: list) -> dict:
         return {
             "home_win_prob": 0.5,
             "away_win_prob": 0.5,
-            "confidence": 0.5
+            "confidence": 0.5,
+            "min_home_odds_decimal": 0.0,
+            "min_away_odds_decimal": 0.0,
+            "min_home_odds_american": 0,
+            "min_away_odds_american": 0,
         }
     
     # Przygotowujemy dane do predykcji
@@ -248,5 +317,9 @@ def predict_game(features: dict, feature_cols: list) -> dict:
     return {
         "home_win_prob": float(home_win_prob),
         "away_win_prob": float(away_win_prob),
-        "confidence": float(confidence)
+        "confidence": float(confidence),
+        "min_home_odds_decimal": prob_to_min_decimal(home_win_prob),
+        "min_away_odds_decimal": prob_to_min_decimal(away_win_prob),
+        "min_home_odds_american": prob_to_min_american(home_win_prob),
+        "min_away_odds_american": prob_to_min_american(away_win_prob),
     }

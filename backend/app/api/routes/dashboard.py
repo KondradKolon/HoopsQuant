@@ -9,6 +9,7 @@ from app.db.models import Odds
 from app.dependencies import get_db, get_current_user
 from datetime import datetime, timedelta
 from app.api.routes.arbitrage import get_arbitrage_opportunities
+from app.services.predictions import prob_to_min_decimal, prob_to_min_american
 
 router = APIRouter(prefix="/api/v1/dashboard", tags=["dashboard"])
 
@@ -47,6 +48,10 @@ async def get_upcoming_games(session: Session = Depends(get_db)):
                     "home_win_prob": prediction.home_win_prob if prediction else None,
                     "away_win_prob": prediction.away_win_prob if prediction else None,
                     "confidence": prediction.confidence if prediction else None,
+                    "min_home_odds_decimal": prob_to_min_decimal(prediction.home_win_prob) if prediction else None,
+                    "min_away_odds_decimal": prob_to_min_decimal(prediction.away_win_prob) if prediction else None,
+                    "min_home_odds_american": prob_to_min_american(prediction.home_win_prob) if prediction else None,
+                    "min_away_odds_american": prob_to_min_american(prediction.away_win_prob) if prediction else None,
                 } if prediction else None,
                 "best_odds": {
                     "home": max([o.home_win_odds for o in odds if o.home_win_odds]) if odds else None,
@@ -242,6 +247,9 @@ async def get_user_picks(
             "result": p.result,
             "profit": p.profit,
             "placed_at": p.placed_at.isoformat() if p.placed_at else None,
+            "home_team": p.game.home_team if p.game else None,
+            "away_team": p.game.away_team if p.game else None,
+            "game_date": p.game.game_date.isoformat() if p.game and p.game.game_date else None,
         } for p in picks]
     except HTTPException:
         raise
