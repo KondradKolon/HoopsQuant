@@ -88,6 +88,9 @@ export default function PicksPage() {
               <Link href="/dashboard" className="text-gray-400 hover:text-white font-medium">
                 Dashboard
               </Link>
+              <Link href="/elo-ranking" className="text-gray-400 hover:text-white font-medium">
+                Elo
+              </Link>
               <Link href="/arbitrage" className="text-gray-400 hover:text-white font-medium">
                 Arbitrage
               </Link>
