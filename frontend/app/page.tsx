@@ -86,7 +86,7 @@ export default function Home() {
               <h2 className="text-5xl md:text-6xl font-semibold text-white leading-tight">
                 Smart NBA
                 <span className="block text-transparent bg-clip-text bg-gradient-to-r from-emerald-200 to-emerald-400">
-                  Alpha, not noise
+                  Every edge, every game
                 </span>
               </h2>
               <p className="text-lg text-slate-300 max-w-3xl mx-auto">

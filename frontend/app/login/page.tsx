@@ -27,6 +27,11 @@ export default function LoginPage() {
     }
   }
 
+  const handleGuest = () => {
+    localStorage.setItem('hoopsquant_guest', 'true')
+    router.push('/dashboard')
+  }
+
   return (
     <div className="min-h-screen flex items-center justify-center quant-grid">
       <div className="w-full max-w-md">
@@ -83,6 +88,7 @@ export default function LoginPage() {
           </div>
 
           <button
+            onClick={handleGuest}
             disabled={loading}
             className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white font-semibold py-3 px-4 rounded-lg transition"
           >
