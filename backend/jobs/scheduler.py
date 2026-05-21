@@ -111,32 +111,17 @@ def start_scheduler():
         # so the dashboard has data as soon as possible after deployment
         import threading
         def initial_seed():
-            logger.info("🌱 Running initial data seed (background)...")
+            logger.info("🌱 Running initial seed (background)...")
             try:
-                # 1. Fetch historical NBA games (for Elo/form features)
-                logger.info("🌱 Fetching historical NBA data...")
-                try:
-                    fetch_nba_2026()
-                except Exception as e:
-                    logger.warning(f"🌱 NBA fetch warning: {e}")
-
-                # 2. Fetch odds for today
                 from datetime import date
                 today = date.today().isoformat()
                 run_odds_pipeline(start_iso=today, end_iso=today, max_games=50)
-
-                # 3. Fetch current/live odds (catches games from all sports)
                 try:
                     fetch_current_odds()
                 except Exception as e:
                     logger.warning(f"🌱 Current odds fetch warning: {e}")
-
-                # 4. Generate predictions
                 generate_predictions()
-
-                # 5. Track odds history
                 track_odds()
-
                 logger.info("🌱 Initial seed complete")
             except Exception as e:
                 logger.warning(f"🌱 Initial seed warning (non-fatal): {e}")
