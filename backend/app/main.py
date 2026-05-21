@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.db.database import engine
 from app.db import models
 from app.api.routes import games, arbitrage, watchlist, dashboard
+from app.api.routes.elo import router as elo_router
 from jobs.scheduler import start_scheduler, stop_scheduler
 import logging
 import time
@@ -80,6 +81,7 @@ app.include_router(games.router)
 app.include_router(arbitrage.router)
 app.include_router(watchlist.router)
 app.include_router(dashboard.router)
+app.include_router(elo_router)
 
 
 # Scheduler startup and shutdown hooks

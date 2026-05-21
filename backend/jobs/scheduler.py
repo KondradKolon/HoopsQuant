@@ -107,6 +107,21 @@ def start_scheduler():
         scheduler.start()
         logger.info("✅ Scheduler started successfully")
         
+        # Run an immediate odds fetch + predictions in a background thread
+        # so the dashboard has data as soon as possible after deployment
+        import threading
+        def initial_seed():
+            logger.info("🌱 Running initial odds fetch (background)...")
+            try:
+                from datetime import date
+                today = date.today().isoformat()
+                run_odds_pipeline(start_iso=today, end_iso=today, max_games=50)
+                generate_predictions()
+                track_odds()
+            except Exception as e:
+                logger.warning(f"🌱 Initial seed warning (non-fatal): {e}")
+        threading.Thread(target=initial_seed, daemon=True).start()
+        
     except Exception as e:
         logger.warning(f"⚠️  Scheduler setup warning: {e}. App will continue without background jobs.")
         # Don't re-raise - let app continue even if scheduler fails
