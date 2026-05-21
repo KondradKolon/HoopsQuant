@@ -23,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 # Import job functions
 from jobs.nba_fetcher_2026 import main as fetch_nba_2026
 from jobs.odds_fetcher import run_odds_pipeline
+from jobs.fetch_current_odds import fetch_and_store as fetch_current_odds
 from jobs.generate_predictions import main as generate_predictions
 from jobs.odds_tracker import track_odds
 
@@ -70,6 +71,17 @@ def start_scheduler():
         )
         logger.info("📅 Scheduled: Odds fetch every 2 hours")
         
+        # Current/live odds - every hour (catches new events and odds movements)
+        scheduler.add_job(
+            fetch_current_odds,
+            'cron',
+            minute='0',
+            id='fetch_current_odds',
+            name='Fetch Current Odds',
+            misfire_grace_time=300
+        )
+        logger.info("📅 Scheduled: Current odds fetch every hour")
+
         # Odds history tracking - every 30 minutes (for sharp detection)
         scheduler.add_job(
             track_odds,

@@ -48,7 +48,7 @@ export default function PicksPage() {
           Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
         },
       })
-      setPicks(response.data.picks || [])
+      setPicks(Array.isArray(response.data) ? response.data : response.data.picks || [])
     } catch (err) {
       console.error('Error fetching picks:', err)
     }
@@ -62,7 +62,8 @@ export default function PicksPage() {
           Authorization: `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
         },
       })
-      setStats(response.data)
+      const d = response.data
+      setStats({ total: d.total_picks || d.total || 0, wins: d.wins || 0, roi: d.roi || 0 })
     } catch (err) {
       console.error('Error fetching stats:', err)
       setError('Failed to load statistics')
@@ -77,7 +78,7 @@ export default function PicksPage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900">
+    <div className="min-h-screen quant-grid">
       {/* Header */}
       <header className="bg-slate-800 border-b border-slate-700 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
@@ -90,7 +91,7 @@ export default function PicksPage() {
               <Link href="/arbitrage" className="text-gray-400 hover:text-white font-medium">
                 Arbitrage
               </Link>
-              <Link href="/picks" className="text-white hover:text-blue-400 font-medium">
+              <Link href="/picks" className="text-emerald-400 font-medium">
                 My Picks
               </Link>
             </nav>
@@ -126,7 +127,7 @@ export default function PicksPage() {
           <div className="grid grid-cols-3 gap-4 mb-8">
             <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
               <div className="text-sm text-gray-400">Total Picks</div>
-              <div className="text-3xl font-bold text-blue-400 mt-1">{stats.total}</div>
+              <div className="text-3xl font-bold text-emerald-400 mt-1">{stats.total}</div>
             </div>
             <div className="bg-slate-800 rounded-lg p-4 border border-slate-700">
               <div className="text-sm text-gray-400">Wins</div>
@@ -147,13 +148,13 @@ export default function PicksPage() {
         {/* Picks Table */}
         {loading ? (
           <div className="text-center py-12">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500" />
           </div>
         ) : picks.length === 0 ? (
           <div className="bg-slate-800 rounded-lg p-8 text-center border border-slate-700">
             <p className="text-gray-400 text-lg">No picks yet</p>
             <p className="text-gray-500 text-sm mt-2">
-              Head to the <Link href="/dashboard" className="text-blue-400 hover:underline">Dashboard</Link> to place your first pick
+              Head to the <Link href="/dashboard" className="text-emerald-400 hover:underline">Dashboard</Link> to place your first pick
             </p>
           </div>
         ) : (
@@ -177,7 +178,7 @@ export default function PicksPage() {
                       {pick.home_team} vs {pick.away_team}
                     </td>
                     <td className="px-6 py-4 text-white font-semibold capitalize">{pick.pick_team}</td>
-                    <td className="px-6 py-4 text-blue-400">{pick.odds}</td>
+                    <td className="px-6 py-4 text-emerald-400">{pick.odds}</td>
                     <td className="px-6 py-4 text-white">${pick.stake}</td>
                     <td className="px-6 py-4">
                       {pick.result ? (

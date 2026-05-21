@@ -65,7 +65,7 @@ export default function ArbitragePage() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-900">
+    <div className="min-h-screen quant-grid">
       {/* Header */}
       <header className="bg-slate-800 border-b border-slate-700 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
@@ -75,7 +75,7 @@ export default function ArbitragePage() {
               <Link href="/dashboard" className="text-gray-400 hover:text-white font-medium">
                 Dashboard
               </Link>
-              <Link href="/arbitrage" className="text-white hover:text-blue-400 font-medium">
+              <Link href="/arbitrage" className="text-emerald-400 font-medium">
                 Arbitrage
               </Link>
               <Link href="/picks" className="text-gray-400 hover:text-white font-medium">
@@ -138,7 +138,7 @@ export default function ArbitragePage() {
         {/* Opportunities Grid */}
         {loading ? (
           <div className="text-center py-12">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600" />
+            <div className="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500" />
           </div>
         ) : opportunities.length === 0 ? (
           <div className="bg-slate-800 rounded-lg p-8 text-center border border-slate-700">

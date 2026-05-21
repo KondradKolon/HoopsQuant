@@ -137,8 +137,15 @@ def transform_games(df: pd.DataFrame) -> pd.DataFrame:
             logger.warning(f"⚠️ Game {game_id} has {len(group)} rows (expected 2), skipping")
             continue
         
-        home = group[group["MATCHUP"].str.contains("vs")].iloc[0]
-        away = group[group["MATCHUP"].str.contains("@")].iloc[0]
+        home_rows = group[group["MATCHUP"].str.contains("vs", na=False)]
+        away_rows = group[group["MATCHUP"].str.contains("@", na=False)]
+
+        if home_rows.empty or away_rows.empty:
+            logger.warning(f"⚠️ Game {game_id} missing home/away matchup rows, skipping")
+            continue
+
+        home = home_rows.iloc[0]
+        away = away_rows.iloc[0]
         
         # Determine winner
         home_wins = home["WL"] == "W"

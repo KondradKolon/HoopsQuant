@@ -13,7 +13,7 @@ router = APIRouter(prefix="/api/v1/games", tags=["games"])
 @router.get("/upcoming")
 async def get_upcoming_games(
     limit: int = Query(10, le=100, ge=1),
-    season: str = Query("2024-25"),
+    season: str = Query("2025-26"),
     db: Session = Depends(get_db)
 ):
     """Get upcoming (not yet played) games with predictions"""
@@ -99,7 +99,7 @@ async def get_game_prediction(
 
 @router.get("")
 async def get_games(
-    season: str = Query("2024-25"),
+    season: str = Query("2025-26"),
     limit: int = Query(20, le=100, ge=1),
     db: Session = Depends(get_db)
 ):
@@ -130,7 +130,7 @@ async def get_games(
 
 @router.get("/count")
 async def count_games(
-    season: str = Query("2024-25"),
+    season: str = Query("2025-26"),
     db: Session = Depends(get_db)
 ):
     """Get count of games in database for a season"""
