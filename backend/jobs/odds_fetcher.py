@@ -9,15 +9,16 @@ import requests
 import pandas as pd
 from datetime import datetime, timedelta
 from typing import Optional, Dict, List
-from app.config import ODDS_API_KEY
+import hashlib
+from app.config import ODDS_API_KEY, BOOKMAKERS as CONFIG_BOOKMAKERS
 from app.db.database import SessionLocal
 from app.db.models import Game, Odds
 
 # Setup logging
 logger = logging.getLogger(__name__)
 
-# Polish bookmakers we track
-POLISH_BOOKMAKERS = ["Betclic", "bet365", "Fortuna"]
+# Selected bookmakers for this account
+POLISH_BOOKMAKERS = CONFIG_BOOKMAKERS
 
 # All NBA team name → abbreviation mapping
 TEAM_ABBREVIATIONS = {
@@ -155,25 +156,43 @@ def extract_moneyline_odds(bookmaker_name: str, all_markets: dict) -> Dict[str, 
         # Find full-game moneyline (avoid 1Q/2Q/3Q/4Q variants)
         for market in bm_data:
             market_name = (market.get("name") or "").strip().lower()
-            
-            # Skip quarter-specific markets
-            if any(q in market_name for q in ("1q", "2q", "3q", "4q", "quarter")):
+
+            # Skip quarter/half specific markets
+            if any(q in market_name for q in ("1q", "2q", "3q", "4q", "quarter", "ht", "2h")):
                 continue
-            
-            # Found moneyline
-            if market_name == "ml" or market_name == "moneyline":
-                odds_list = market.get("odds") or []
-                if odds_list:
-                    odd = odds_list[0]
-                    return {
-                        "home": float(odd.get("home", 0)) or None,
-                        "away": float(odd.get("away", 0)) or None
-                    }
-    
+
+            odds_list = market.get("odds") or []
+            if not odds_list:
+                continue
+
+            # Standard moneyline
+            if market_name in ("ml", "moneyline"):
+                odd = odds_list[0]
+                return {
+                    "home": float(odd.get("home", 0)) or None,
+                    "away": float(odd.get("away", 0)) or None
+                }
+
+            # 3-way result (home/draw/away)
+            if market_name == "3-way result":
+                odd = odds_list[0]
+                return {
+                    "home": float(odd.get("home", 0)) or None,
+                    "away": float(odd.get("away", 0)) or None
+                }
+
     except (KeyError, IndexError, ValueError) as e:
         logger.warning(f"Error extracting odds for {bookmaker_name}: {e}")
     
     return {"home": None, "away": None}
+
+
+def derive_season_from_date(game_date: datetime.date) -> str:
+    """Derive NBA season label from a game date."""
+    year = game_date.year
+    if game_date.month >= 10:
+        return f"{year}-{str(year + 1)[-2:]}"
+    return f"{year - 1}-{str(year)[-2:]}"
 
 
 def fetch_odds_for_game(event_id: str, bookmakers: Optional[List[str]] = None) -> dict:
@@ -265,9 +284,26 @@ def run_odds_pipeline(start_iso: str, end_iso: str, max_games: int = 50, sleep_s
                 ).first()
                 
                 if not game_in_db:
-                    logger.warning(f"  → Game not found in DB for {home_team_abbr} vs {away_team_abbr}")
-                    time.sleep(sleep_sec)
-                    continue
+                    logger.warning(f"  → Game not found in DB for {home_team_abbr} vs {away_team_abbr}, creating placeholder")
+
+                    season_label = derive_season_from_date(game_date)
+                    odds_event_id_str = str(odds_event_id)
+                    game_id = "ODDS" + hashlib.md5(odds_event_id_str.encode()).hexdigest()[:12]
+
+                    game_in_db = Game(
+                        game_id=game_id,
+                        game_date=game_date,
+                        season=season_label,
+                        home_team=home_team_abbr,
+                        away_team=away_team_abbr,
+                        home_score=None,
+                        away_score=None,
+                        home_team_wins=None,
+                    )
+
+                    db.add(game_in_db)
+                    db.commit()
+                    logger.info(f"  → Created game in DB: {game_id}")
                 
                 game_id = game_in_db.game_id
                 logger.info(f"  → Found game in DB: {game_id}")

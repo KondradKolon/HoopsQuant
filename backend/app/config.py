@@ -19,6 +19,9 @@ SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 # APIs
 ODDS_API_KEY = os.getenv("ODDS_API_KEY")
 
+# Bookmakers (can change 2 every 12 hours)
+BOOKMAKERS = os.getenv("BOOKMAKERS", "Superbet,Stake").split(",")
+
 # Environment
 ENV = os.getenv("ENV", "development")
 DEBUG = ENV == "development"
