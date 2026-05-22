@@ -6,8 +6,6 @@ Runs all background jobs on a schedule
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.executors.pool import ThreadPoolExecutor
 import logging
-import sys
-from pathlib import Path
 from datetime import datetime
 
 # Setup logging
@@ -16,9 +14,6 @@ logging.basicConfig(
     format='[%(asctime)s] %(name)s: %(message)s'
 )
 logger = logging.getLogger("scheduler")
-
-# Ensure imports work from backend root
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Import job functions
 from jobs.nba_fetcher_2026 import main as fetch_nba_2026

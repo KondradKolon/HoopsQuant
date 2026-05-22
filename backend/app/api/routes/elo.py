@@ -3,6 +3,7 @@ Elo Rankings API Route — rankings, historical trend, upcoming predictions
 """
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
+from app.constants import NBA_CONFERENCES
 from app.dependencies import get_db
 from app.db.models import Game
 from app.services.predictions import calculate_elo
@@ -12,11 +13,6 @@ from datetime import date
 router = APIRouter(prefix="/api/v1/elo", tags=["elo"])
 
 HOME_ADVANTAGE = 50
-
-NBA_CONFERENCES = {
-    "east": {"BOS", "NYK", "BKN", "PHI", "TOR", "CLE", "MIL", "IND", "CHI", "DET", "MIA", "ATL", "CHA", "ORL", "WAS"},
-    "west": {"DEN", "MIN", "OKC", "POR", "UTA", "LAL", "LAC", "GSW", "SAC", "PHX", "DAL", "HOU", "SAS", "MEM", "NOP"},
-}
 
 
 def load_games_df(db: Session, season: str) -> pd.DataFrame:

@@ -26,6 +26,7 @@ COPY backend/ .
 # Set PATH to use pip installed packages
 ENV PATH=/root/.local/bin:$PATH
 ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
 
 # Expose port
 EXPOSE 8000

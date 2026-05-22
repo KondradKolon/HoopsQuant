@@ -15,8 +15,6 @@ Lub z głównego katalogu backend/:
   cd backend && python -m jobs.generate_predictions
 """
 
-import sys
-from pathlib import Path
 import logging
 from datetime import datetime
 from sqlalchemy import text
@@ -28,9 +26,6 @@ logging.basicConfig(
     format='[%(asctime)s] %(name)s: %(message)s'
 )
 logger = logging.getLogger("generate_predictions")
-
-# Import z app package
-sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from app.db.database import SessionLocal
 from app.db.models import Game, Prediction

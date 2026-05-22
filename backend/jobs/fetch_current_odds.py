@@ -8,6 +8,7 @@ import hashlib
 import requests
 from datetime import datetime, date
 from app.config import ODDS_API_KEY, BOOKMAKERS as CONFIG_BOOKMAKERS
+from app.constants import TEAM_ABBREVIATIONS as TEAM_MAP
 from app.db.database import SessionLocal
 from app.db.models import Game, Odds
 
@@ -15,19 +16,6 @@ logger = logging.getLogger(__name__)
 
 BASE = "https://api.odds-api.io/v3"
 BOOKMAKERS = CONFIG_BOOKMAKERS
-
-TEAM_MAP = {
-    "Atlanta Hawks": "ATL", "Boston Celtics": "BOS", "Brooklyn Nets": "BKN",
-    "Charlotte Hornets": "CHA", "Chicago Bulls": "CHI", "Cleveland Cavaliers": "CLE",
-    "Dallas Mavericks": "DAL", "Denver Nuggets": "DEN", "Detroit Pistons": "DET",
-    "Golden State Warriors": "GSW", "Houston Rockets": "HOU", "Indiana Pacers": "IND",
-    "LA Clippers": "LAC", "Los Angeles Lakers": "LAL", "Memphis Grizzlies": "MEM",
-    "Miami Heat": "MIA", "Milwaukee Bucks": "MIL", "Minnesota Timberwolves": "MIN",
-    "New Orleans Pelicans": "NOP", "New York Knicks": "NYK", "Oklahoma City Thunder": "OKC",
-    "Orlando Magic": "ORL", "Philadelphia 76ers": "PHI", "Phoenix Suns": "PHX",
-    "Portland Trail Blazers": "POR", "Sacramento Kings": "SAC", "San Antonio Spurs": "SAS",
-    "Toronto Raptors": "TOR", "Utah Jazz": "UTA", "Washington Wizards": "WAS",
-}
 
 SPORTS = ["basketball"]
 
