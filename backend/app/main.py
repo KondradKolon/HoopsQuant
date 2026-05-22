@@ -5,6 +5,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.db.database import engine
 from app.db import models
+from app.config import ALLOWED_ORIGINS
 from app.api.routes import games, arbitrage, watchlist, dashboard
 from app.api.routes.elo import router as elo_router
 from jobs.scheduler import start_scheduler, stop_scheduler
@@ -44,15 +45,10 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Add CORS middleware
+# Add CORS middleware — origins from ALLOWED_ORIGINS env var
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://localhost:3001",
-        "https://hoops-quant.vercel.app",
-        "https://hoopsquant.vercel.app",
-    ],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -29,7 +29,7 @@ TEAM_MAP = {
     "Toronto Raptors": "TOR", "Utah Jazz": "UTA", "Washington Wizards": "WAS",
 }
 
-SPORTS = ["basketball", "football", "tennis"]
+SPORTS = ["basketball"]
 
 
 def extract_moneyline(market_list: list, bookmaker: str) -> tuple:

@@ -22,6 +22,10 @@ ODDS_API_KEY = os.getenv("ODDS_API_KEY")
 # Bookmakers (can change 2 every 12 hours)
 BOOKMAKERS = os.getenv("BOOKMAKERS", "Superbet,Stake").split(",")
 
+# CORS — comma-separated origins, default for local dev + production
+_DEFAULT_ORIGINS = "http://localhost:3000,http://localhost:3001,https://hoops-quant.vercel.app,https://hoopsquant.vercel.app"
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", _DEFAULT_ORIGINS).split(",")
+
 # Environment
 ENV = os.getenv("ENV", "development")
 DEBUG = ENV == "development"
