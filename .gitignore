@@ -18,6 +18,7 @@ downloads/
 eggs/
 .eggs/
 lib/
+!frontend/lib/
 lib64/
 parts/
 sdist/
@@ -203,6 +204,11 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+# Agent/IDE config files (never commit to repo)
+agents.md
+LEARNING_SYSTEM.md
+opencode.json
 
 # Marimo
 marimo/_static/

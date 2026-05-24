@@ -4,8 +4,11 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { createClient } from '@/lib/supabase/client'
-import apiClient from '@/lib/api'
+import apiClient, { cachedGet, invalidateCache } from '@/lib/api'
 import Link from 'next/link'
+import TeamLogo from '@/components/TeamLogo'
+import InfoIcon from '@/components/InfoIcon'
+import { getTeam } from '@/lib/teams'
 
 interface Prediction {
   home_win_prob: number
@@ -112,8 +115,11 @@ export default function DashboardPage() {
   const fetchUpcomingGames = async () => {
     try {
       setLoading(true)
-      const response = await apiClient.get('/dashboard/games/upcoming', { headers: await authHeaders() })
-      setGames(Array.isArray(response.data) ? response.data : response.data.games || [])
+      const data = await cachedGet<Game[] | { games: Game[] }>('/dashboard/games/upcoming', {
+        headers: await authHeaders(),
+        ttlMs: 60_000,
+      })
+      setGames(Array.isArray(data) ? data : data.games || [])
       setError(null)
     } catch { setError('Failed to load games') }
     finally { setLoading(false) }
@@ -135,6 +141,7 @@ export default function DashboardPage() {
         pick_type: 'moneyline',
       }, { headers: await authHeaders() })
       setPickMessage('Pick saved! Track it under My Picks.')
+      invalidateCache('/dashboard/picks')
     } catch { setPickMessage('Failed to save pick. Try again.') }
     finally { setPickSaving(false) }
   }
@@ -199,25 +206,19 @@ export default function DashboardPage() {
               return (
                 <div key={game.game_id} className="bg-slate-800 rounded-lg border border-slate-700 p-6 hover:border-emerald-500 transition">
                   <div className="flex flex-wrap justify-between items-start gap-4 mb-4">
-                    <div className="flex items-center gap-4">
-                      <div className="text-center">
-                        <div className="text-3xl font-bold text-white">{game.home_team}</div>
-                        <div className="text-sm text-gray-400">Home</div>
-                      </div>
-                      <div className="text-gray-500 font-bold">vs</div>
-                      <div className="text-center">
-                        <div className="text-3xl font-bold text-white">{game.away_team}</div>
-                        <div className="text-sm text-gray-400">Away</div>
-                      </div>
+                    <div className="flex items-center gap-6">
+                      <TeamLogo abbr={game.home_team} size="lg" showName="short" subtitle="Home" layout="vertical" />
+                      <div className="text-gray-500 font-bold text-mono text-sm">vs</div>
+                      <TeamLogo abbr={game.away_team} size="lg" showName="short" subtitle="Away" layout="vertical" />
                     </div>
 
                     {game.prediction && (
                       <div className="flex gap-3 items-start">
                         <div className={`px-3 py-1 rounded-lg text-xs font-bold uppercase ${homeRate?.bgColor} ${homeRate?.color}`}>
-                          {game.home_team}: {homeRate?.label}
+                          {getTeam(game.home_team).shortName}: {homeRate?.label}
                         </div>
                         <div className={`px-3 py-1 rounded-lg text-xs font-bold uppercase ${awayRate?.bgColor} ${awayRate?.color}`}>
-                          {game.away_team}: {awayRate?.label}
+                          {getTeam(game.away_team).shortName}: {awayRate?.label}
                         </div>
                       </div>
                     )}
@@ -231,15 +232,17 @@ export default function DashboardPage() {
                       </div>
                     </div>
 
-                    {game.best_odds && game.best_odds.home && (
-                      <div>
-                        <div className="text-sm text-gray-400">Best Odds</div>
+                    <div>
+                      <div className="text-sm text-gray-400">Best Odds</div>
+                      {game.best_odds && game.best_odds.home ? (
                         <div className="flex gap-3">
                           <span className="text-green-400 font-semibold">{game.best_odds.home.toFixed(2)}x</span>
                           <span className="text-red-400 font-semibold">{game.best_odds.away.toFixed(2)}x</span>
                         </div>
-                      </div>
-                    )}
+                      ) : (
+                        <div className="text-slate-500 text-sm italic">Odds unavailable</div>
+                      )}
+                    </div>
 
                     {game.prediction && (
                       <div>
@@ -274,9 +277,15 @@ export default function DashboardPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
           <div className="quant-panel rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto p-6 space-y-6">
             {/* Header */}
-            <div className="flex justify-between items-start">
-              <div>
-                <h3 className="text-xl font-bold text-white">{detailGame.home_team} vs {detailGame.away_team}</h3>
+            <div className="flex justify-between items-start gap-4">
+              <div className="min-w-0">
+                <div className="flex items-center gap-3 mb-1">
+                  <TeamLogo abbr={detailGame.home_team} size="sm" showName="none" />
+                  <h3 className="text-lg font-bold text-white truncate">
+                    {getTeam(detailGame.home_team).fullName} vs {getTeam(detailGame.away_team).fullName}
+                  </h3>
+                  <TeamLogo abbr={detailGame.away_team} size="sm" showName="none" />
+                </div>
                 <p className="text-sm text-gray-500">
                   {new Date(detailGame.game_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
                 </p>
@@ -288,12 +297,12 @@ export default function DashboardPage() {
             <div>
               <div className="flex justify-between text-sm mb-1">
                 <span className="text-gray-300 font-semibold">Win Probability</span>
-                <span className="text-gray-500 text-xs cursor-help" title="Model's estimated chance each team wins. Not a guarantee — it's a probability, not a prediction.">ⓘ</span>
+                <InfoIcon title="Model's estimated chance each team wins. Not a guarantee — it's a probability, not a prediction." />
               </div>
               <div className="space-y-2">
                 <div>
                   <div className="flex justify-between text-xs mb-0.5">
-                    <span className="text-white">{detailGame.home_team}</span>
+                    <span className="text-white">{getTeam(detailGame.home_team).shortName}</span>
                     <span className="text-emerald-400 font-bold">{(detailGame.prediction.home_win_prob * 100).toFixed(1)}%</span>
                   </div>
                   <div className="w-full bg-slate-700 rounded-full h-2">
@@ -302,7 +311,7 @@ export default function DashboardPage() {
                 </div>
                 <div>
                   <div className="flex justify-between text-xs mb-0.5">
-                    <span className="text-white">{detailGame.away_team}</span>
+                    <span className="text-white">{getTeam(detailGame.away_team).shortName}</span>
                     <span className="text-emerald-400 font-bold">{(detailGame.prediction.away_win_prob * 100).toFixed(1)}%</span>
                   </div>
                   <div className="w-full bg-slate-700 rounded-full h-2">
@@ -317,7 +326,7 @@ export default function DashboardPage() {
             <div>
               <div className="flex justify-between text-sm mb-1">
                 <span className="text-gray-300 font-semibold">Confidence Score</span>
-                <span className="text-gray-500 text-xs cursor-help" title="How often the model is correct when predicting at this confidence level. 65% → right ~65 out of 100 times.">ⓘ</span>
+                <InfoIcon title="How often the model is correct when predicting at this confidence level. 65% → right ~65 out of 100 times." />
               </div>
               <div className="flex items-center gap-3">
                 <div className="flex-1 bg-slate-700 rounded-full h-3">
@@ -341,7 +350,7 @@ export default function DashboardPage() {
               return (
                 <div key={team} className={`rounded-xl p-4 border ${rating.bgColor} border-slate-700`}>
                   <div className="flex items-center justify-between mb-3">
-                    <h4 className="text-white font-bold">{team}</h4>
+                    <TeamLogo abbr={team} size="sm" showName="full" />
                     <span className={`px-3 py-0.5 rounded-full text-xs font-bold uppercase ${rating.bgColor} ${rating.color}`}>
                       {rating.label}
                     </span>
@@ -399,9 +408,10 @@ export default function DashboardPage() {
                     </div>
                   </div>
                   <p className="text-xs text-gray-500 mt-2">{rating.explanation}</p>
-                  <p className="text-[10px] text-gray-600 mt-1">
-                    ⓘ EV (Expected Value) = average profit per bet. Positive = profitable long-term.
-                    Kelly = recommended % of bankroll to bet based on edge size.
+                  <p className="text-[10px] text-gray-600 mt-1 flex items-start gap-1">
+                    <InfoIcon size={11} className="text-gray-600 mt-px" />
+                    <span>EV (Expected Value) = average profit per bet. Positive = profitable long-term.
+                    Kelly = recommended % of bankroll to bet based on edge size.</span>
                   </p>
                 </div>
               )
@@ -417,8 +427,8 @@ export default function DashboardPage() {
                   className="flex-1 bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm"
                 >
                   <option value="">Select team...</option>
-                  <option value={detailGame.home_team}>{detailGame.home_team} (Home)</option>
-                  <option value={detailGame.away_team}>{detailGame.away_team} (Away)</option>
+                  <option value={detailGame.home_team}>{getTeam(detailGame.home_team).fullName} (Home)</option>
+                  <option value={detailGame.away_team}>{getTeam(detailGame.away_team).fullName} (Away)</option>
                 </select>
                 <input
                   type="number"

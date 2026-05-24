@@ -4,8 +4,11 @@ import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/lib/hooks/useAuth'
 import { createClient } from '@/lib/supabase/client'
-import apiClient from '@/lib/api'
+import { cachedGet } from '@/lib/api'
 import Link from 'next/link'
+import TeamLogo from '@/components/TeamLogo'
+import InfoIcon from '@/components/InfoIcon'
+import { getTeam } from '@/lib/teams'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer,
@@ -56,6 +59,7 @@ export default function EloRankingPage() {
   const [trendLoading, setTrendLoading] = useState(false)
   const [upcomingGames, setUpcomingGames] = useState<UpcomingGame[]>([])
   const [upcomingLoading, setUpcomingLoading] = useState(true)
+  const [detailGame, setDetailGame] = useState<UpcomingGame | null>(null)
   const router = useRouter()
   const supabase = createClient()
 
@@ -81,8 +85,11 @@ export default function EloRankingPage() {
   const fetchRankings = async () => {
     try {
       setLoading(true)
-      const res = await apiClient.get(`/elo/rankings?conference=${conference}`, { headers: await authHeaders() })
-      setTeams(res.data.teams || [])
+      const data = await cachedGet<{ teams: TeamRanking[] }>(`/elo/rankings?conference=${conference}`, {
+        headers: await authHeaders(),
+        ttlMs: 300_000,
+      })
+      setTeams(data.teams || [])
       setError(null)
     } catch (err) {
       console.error('Error fetching Elo rankings:', err)
@@ -95,8 +102,11 @@ export default function EloRankingPage() {
   const fetchUpcoming = async () => {
     try {
       setUpcomingLoading(true)
-      const res = await apiClient.get('/elo/upcoming', { headers: await authHeaders() })
-      setUpcomingGames(res.data.games || [])
+      const data = await cachedGet<{ games: UpcomingGame[] }>('/elo/upcoming', {
+        headers: await authHeaders(),
+        ttlMs: 60_000,
+      })
+      setUpcomingGames(data.games || [])
     } catch (err) {
       console.error('Error fetching upcoming:', err)
     } finally {
@@ -107,8 +117,11 @@ export default function EloRankingPage() {
   const fetchTrend = async (team: string) => {
     try {
       setTrendLoading(true)
-      const res = await apiClient.get(`/elo/trend?team=${team}`, { headers: await authHeaders() })
-      setTrend(res.data.points || [])
+      const data = await cachedGet<{ points: TrendPoint[] }>(`/elo/trend?team=${team}`, {
+        headers: await authHeaders(),
+        ttlMs: 300_000,
+      })
+      setTrend(data.points || [])
     } catch (err) {
       console.error('Error fetching trend:', err)
       setTrend([])
@@ -172,20 +185,21 @@ export default function EloRankingPage() {
           ) : (
             <div className="flex gap-4 overflow-x-auto pb-2">
               {upcomingGames.map((g) => (
-                <div
+                <button
                   key={g.game_id}
-                  className="min-w-[260px] bg-slate-800 rounded-xl p-5 border border-slate-700 flex-shrink-0"
+                  onClick={() => setDetailGame(g)}
+                  className="min-w-[280px] bg-slate-800 rounded-xl p-5 border border-slate-700 hover:border-emerald-500 transition flex-shrink-0 text-left focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 >
-                  <div className="text-xs text-gray-500 mb-2">{g.game_date}</div>
-                  <div className="flex justify-between items-center mb-3">
-                    <span className="text-white font-bold text-lg">{g.home_team}</span>
-                    <span className="text-gray-500 text-sm">vs</span>
-                    <span className="text-white font-bold text-lg">{g.away_team}</span>
+                  <div className="text-xs text-gray-500 mb-3">{g.game_date}</div>
+                  <div className="flex justify-between items-center mb-4">
+                    <TeamLogo abbr={g.home_team} size="md" showName="abbr" layout="vertical" />
+                    <span className="text-gray-500 text-sm font-mono">vs</span>
+                    <TeamLogo abbr={g.away_team} size="md" showName="abbr" layout="vertical" />
                   </div>
                   {g.prediction ? (
                     <div className="space-y-1">
                       <div className="flex justify-between text-sm">
-                        <span className="text-gray-400">{g.home_team}</span>
+                        <span className="text-gray-400">{getTeam(g.home_team).shortName}</span>
                         <span className="text-emerald-400 font-semibold">{(g.prediction.home_win_prob * 100).toFixed(0)}%</span>
                       </div>
                       <div className="w-full bg-slate-700 rounded-full h-1.5">
@@ -202,7 +216,7 @@ export default function EloRankingPage() {
                   ) : (
                     <div className="text-xs text-gray-500">No prediction available</div>
                   )}
-                </div>
+                </button>
               ))}
             </div>
           )}
@@ -268,7 +282,7 @@ export default function EloRankingPage() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <span className="text-white font-bold text-lg">{t.team}</span>
+                          <TeamLogo abbr={t.team} size="sm" showName="full" />
                           <span className={`text-xs uppercase px-2 py-0.5 rounded-full ${
                             t.conference === 'east'
                               ? 'bg-blue-900/40 text-blue-400'
@@ -297,7 +311,7 @@ export default function EloRankingPage() {
                       <tr key={`${t.team}-trend`}>
                         <td colSpan={6} className="px-6 py-6 bg-slate-900/50">
                           <div className="mb-4">
-                            <h3 className="text-white font-semibold mb-1">{t.team} — Elo Trend</h3>
+                            <h3 className="text-white font-semibold mb-1">{getTeam(t.team).fullName} — Elo Trend</h3>
                             <p className="text-gray-500 text-xs">Season {conference === 'all' ? '2025-26' : `${conference === 'east' ? 'Eastern' : 'Western'} Conference`}</p>
                           </div>
                           {trendLoading ? (
@@ -357,6 +371,73 @@ export default function EloRankingPage() {
           </div>
         )}
       </main>
+
+      {detailGame && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="quant-panel rounded-2xl w-full max-w-md p-6 space-y-6">
+            <div className="flex justify-between items-start gap-4">
+              <div className="text-sm text-gray-500">{detailGame.game_date}</div>
+              <button
+                onClick={() => setDetailGame(null)}
+                className="text-gray-500 hover:text-white text-xl leading-none"
+                aria-label="Close"
+              >
+                &times;
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between gap-4">
+              <TeamLogo abbr={detailGame.home_team} size="xl" showName="full" subtitle="Home" layout="vertical" />
+              <div className="text-gray-500 font-bold text-mono">vs</div>
+              <TeamLogo abbr={detailGame.away_team} size="xl" showName="full" subtitle="Away" layout="vertical" />
+            </div>
+
+            {detailGame.prediction ? (
+              <>
+                <div>
+                  <div className="flex justify-between text-sm mb-2">
+                    <span className="text-gray-300 font-semibold">Elo Win Probability</span>
+                    <InfoIcon title="Probability computed from current Elo ratings + home court advantage (50 Elo points)." />
+                  </div>
+                  <div className="space-y-3">
+                    <div>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-white">{getTeam(detailGame.home_team).shortName}</span>
+                        <span className="text-emerald-400 font-bold">{(detailGame.prediction.home_win_prob * 100).toFixed(1)}%</span>
+                      </div>
+                      <div className="w-full bg-slate-700 rounded-full h-2">
+                        <div className="bg-emerald-500 h-2 rounded-full" style={{ width: `${detailGame.prediction.home_win_prob * 100}%` }} />
+                      </div>
+                    </div>
+                    <div>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-white">{getTeam(detailGame.away_team).shortName}</span>
+                        <span className="text-emerald-400 font-bold">{(detailGame.prediction.away_win_prob * 100).toFixed(1)}%</span>
+                      </div>
+                      <div className="w-full bg-slate-700 rounded-full h-2">
+                        <div className="bg-red-500/60 h-2 rounded-full" style={{ width: `${detailGame.prediction.away_win_prob * 100}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 border-t border-slate-700 pt-4">
+                  <div className="bg-slate-800/60 rounded-lg p-3">
+                    <div className="text-xs text-gray-500 mb-1">{getTeam(detailGame.home_team).shortName} Elo</div>
+                    <div className="text-emerald-400 font-bold text-xl">{detailGame.prediction.home_elo.toFixed(0)}</div>
+                  </div>
+                  <div className="bg-slate-800/60 rounded-lg p-3">
+                    <div className="text-xs text-gray-500 mb-1">{getTeam(detailGame.away_team).shortName} Elo</div>
+                    <div className="text-emerald-400 font-bold text-xl">{detailGame.prediction.away_elo.toFixed(0)}</div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <p className="text-center text-gray-500 py-6">No prediction data available for this matchup.</p>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

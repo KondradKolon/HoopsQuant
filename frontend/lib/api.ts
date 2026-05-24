@@ -112,4 +112,63 @@ apiClient.interceptors.request.use((config) => {
   return config
 })
 
+// ─────────────────────────────────────────────────────────────
+// Light in-memory cache for GET requests (stale-while-revalidate-lite).
+// Avoids re-fetching the same payload on every page navigation / tab focus.
+// Module-scoped Map; cleared on hard reload, which is the desired behavior.
+// ─────────────────────────────────────────────────────────────
+
+interface CacheEntry {
+  data: unknown
+  expires: number
+}
+
+const responseCache = new Map<string, CacheEntry>()
+const inflightRequests = new Map<string, Promise<unknown>>()
+
+const DEFAULT_TTL_MS = 60_000
+
+export interface CachedGetOptions {
+  ttlMs?: number
+  headers?: Record<string, string>
+  force?: boolean
+}
+
+export async function cachedGet<T = unknown>(url: string, options: CachedGetOptions = {}): Promise<T> {
+  const ttl = options.ttlMs ?? DEFAULT_TTL_MS
+  const cacheKey = url
+
+  if (!options.force) {
+    const cached = responseCache.get(cacheKey)
+    if (cached && cached.expires > Date.now()) {
+      return cached.data as T
+    }
+    const inflight = inflightRequests.get(cacheKey)
+    if (inflight) return inflight as Promise<T>
+  }
+
+  const requestPromise = apiClient
+    .get(url, { headers: options.headers })
+    .then((response) => {
+      responseCache.set(cacheKey, { data: response.data, expires: Date.now() + ttl })
+      return response.data as T
+    })
+    .finally(() => {
+      inflightRequests.delete(cacheKey)
+    })
+
+  inflightRequests.set(cacheKey, requestPromise)
+  return requestPromise
+}
+
+export function invalidateCache(urlPattern?: string): void {
+  if (!urlPattern) {
+    responseCache.clear()
+    return
+  }
+  for (const key of Array.from(responseCache.keys())) {
+    if (key.includes(urlPattern)) responseCache.delete(key)
+  }
+}
+
 export default apiClient

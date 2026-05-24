@@ -6,6 +6,8 @@ import { useAuth } from '@/lib/hooks/useAuth'
 import { createClient } from '@/lib/supabase/client'
 import apiClient from '@/lib/api'
 import Link from 'next/link'
+import TeamLogo from '@/components/TeamLogo'
+import { getTeam } from '@/lib/teams'
 
 interface Pick {
   id: number
@@ -177,10 +179,16 @@ export default function PicksPage() {
               <tbody className="divide-y divide-slate-700">
                 {picks.map((pick) => (
                   <tr key={pick.id} className="hover:bg-slate-700 transition">
-                    <td className="px-6 py-4 text-white font-semibold">
-                      {pick.home_team} vs {pick.away_team}
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2">
+                        <TeamLogo abbr={pick.home_team} size="sm" showName="abbr" />
+                        <span className="text-gray-500 text-xs">vs</span>
+                        <TeamLogo abbr={pick.away_team} size="sm" showName="abbr" />
+                      </div>
                     </td>
-                    <td className="px-6 py-4 text-white font-semibold capitalize">{pick.pick_team}</td>
+                    <td className="px-6 py-4">
+                      <TeamLogo abbr={pick.pick_team} size="sm" showName="short" />
+                    </td>
                     <td className="px-6 py-4 text-emerald-400">{pick.odds}</td>
                     <td className="px-6 py-4 text-white">${pick.stake}</td>
                     <td className="px-6 py-4">
