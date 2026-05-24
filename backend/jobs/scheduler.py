@@ -108,13 +108,15 @@ def start_scheduler():
         def initial_seed():
             logger.info("🌱 Running initial seed (background)...")
             try:
-                from datetime import date
-                today = date.today().isoformat()
-                run_odds_pipeline(start_iso=today, end_iso=today, max_games=50)
+                # Fetch odds for all 4 rounds (past 90 days) + current odds
+                from scripts.seed_odds_to_supabase import seed_historical_odds, seed_current_odds
+                from app.db.database import SessionLocal
+                db = SessionLocal()
                 try:
-                    fetch_current_odds()
-                except Exception as e:
-                    logger.warning(f"🌱 Current odds fetch warning: {e}")
+                    seed_historical_odds(db)
+                    seed_current_odds(db)
+                finally:
+                    db.close()
                 generate_predictions()
                 track_odds()
                 logger.info("🌱 Initial seed complete")
