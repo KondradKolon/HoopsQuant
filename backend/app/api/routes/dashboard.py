@@ -4,11 +4,10 @@ Dashboard API Routes - Main user-facing endpoints for predictions, picks, and ar
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 from sqlalchemy import func, Integer
-from app.db.models import Game, Prediction, UserPick, User, OddsHistory
+from app.db.models import Game, Prediction, UserPick, User
 from app.db.models import Odds
 from app.dependencies import get_db, get_current_user
-from datetime import datetime, timedelta
-from app.api.routes.arbitrage import get_arbitrage_opportunities
+from datetime import datetime
 from app.services.predictions import prob_to_min_decimal, prob_to_min_american
 
 router = APIRouter(prefix="/api/v1/dashboard", tags=["dashboard"])

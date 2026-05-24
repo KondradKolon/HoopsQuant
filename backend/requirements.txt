@@ -15,3 +15,9 @@ PyJWT==2.12.1
 apscheduler==3.10.4
 supabase==2.0.3
 
+# Testing & linting
+pytest
+pytest-cov
+httpx<0.28
+ruff
+

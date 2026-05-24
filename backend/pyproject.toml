@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --tb=short --ignore=tests/test_data_fetching.py"
+filterwarnings = [
+    "ignore::DeprecationWarning",
+]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+extend-exclude = [
+    "tests/verify_*.py",
+    "tests/arbitrage_finder.py",
+    "tests/backtest.py",
+    "tests/test_data_fetching.py",
+    "scripts",
+    "jobs",
+]
+
+[tool.ruff.lint]
+select = ["E", "F"]
+ignore = ["E501", "E402", "E711", "E722"]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]
+"tests/*" = ["F841"]
+
+[tool.coverage.run]
+source = ["app"]
+omit = ["*/tests/*", "*/migrations/*"]
