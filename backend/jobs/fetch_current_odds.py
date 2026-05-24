@@ -74,17 +74,26 @@ def fetch_and_store():
     logger.info(f"Found {len(all_events)} current events")
 
     # 2. Batch-fetch odds via /odds/multi (10 events/call)
+    # NOTE: /odds/multi requires `bookmakers` param — without it the API returns
+    # HTTP 400 "Missing bookmakers" and the entire pipeline silently no-ops.
     event_ids = list(all_events.keys())
     batches = [event_ids[i:i+10] for i in range(0, len(event_ids), 10)]
+    bookmakers_param = ",".join(BOOKMAKERS)
 
     odds_map = {}
     for batch in batches:
         try:
             resp = requests.get(
                 f"{BASE}/odds/multi",
-                params={"apiKey": ODDS_API_KEY, "eventIds": ",".join(batch)},
+                params={
+                    "apiKey": ODDS_API_KEY,
+                    "eventIds": ",".join(batch),
+                    "bookmakers": bookmakers_param,
+                },
                 timeout=10,
             )
+            if resp.status_code != 200:
+                logger.warning(f"/odds/multi returned {resp.status_code}: {resp.text[:200]}")
             if resp.status_code == 200:
                 data = resp.json()
                 items = data if isinstance(data, list) else [data] if isinstance(data, dict) and data.get("id") else []
@@ -106,8 +115,12 @@ def fetch_and_store():
         home_full = ev.get("home", "")
         away_full = ev.get("away", "")
         date_str = ev.get("date", "")
-        home_code = TEAM_MAP.get(home_full, home_full)[:10]
-        away_code = TEAM_MAP.get(away_full, away_full)[:10]
+        # Use mapped abbreviation when available; fall back to full name (column accepts up to 50 chars).
+        # Earlier code truncated to 10 chars which produced garbled names like "San Antoni" / "Oklahoma C".
+        home_code = TEAM_MAP.get(home_full) or (home_full or "").strip()[:50]
+        away_code = TEAM_MAP.get(away_full) or (away_full or "").strip()[:50]
+        if not home_code or not away_code:
+            continue
         try:
             game_date = datetime.fromisoformat(date_str.replace("Z", "+00:00")).date() if date_str else date.today()
         except Exception:

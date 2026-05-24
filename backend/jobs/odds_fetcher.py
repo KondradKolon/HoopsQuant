@@ -83,8 +83,10 @@ def fetch_events_list(start_date: str, end_date: str) -> List[dict]:
         "to": end_date
     }
     
+    # Use /events with a date filter for current games; /historical/events is for
+    # past finished games only and 404s on live/upcoming event IDs.
     try:
-        response = requests.get(f"{BASE_URL}/historical/events", params=params, timeout=10)
+        response = requests.get(f"{BASE_URL}/events", params=params, timeout=10)
         response.raise_for_status()
         payload = response.json()
         
@@ -184,8 +186,9 @@ def fetch_odds_for_game(event_id: str, bookmakers: Optional[List[str]] = None) -
         "bookmakers": ",".join(bookmakers)
     }
     
+    # /odds is the current endpoint; /historical/odds 404s for live/upcoming events.
     try:
-        response = requests.get(f"{BASE_URL}/historical/odds", params=params, timeout=10)
+        response = requests.get(f"{BASE_URL}/odds", params=params, timeout=10)
         response.raise_for_status()
         return response.json()
     except requests.exceptions.RequestException as e:
