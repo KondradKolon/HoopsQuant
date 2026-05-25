@@ -4,11 +4,48 @@ import numpy as np
 import pandas as pd
 
 from app.services.predictions import (
+    _matchup_home_net_ortg,
+    _sanitize_features,
     calculate_elo,
     calculate_team_form,
     prob_to_min_american,
     prob_to_min_decimal,
 )
+
+
+class TestMatchupNetOrtg:
+    def test_home_team_was_home_in_past_game(self):
+        row = pd.Series({
+            "home_team": "OKC",
+            "home_ortg": 120.0,
+            "home_drtg": 110.0,
+        })
+        assert _matchup_home_net_ortg(row, "OKC") == 10.0
+
+    def test_home_team_was_away_in_past_game(self):
+        row = pd.Series({
+            "home_team": "SAS",
+            "home_ortg": 115.0,
+            "home_drtg": 105.0,
+        })
+        # Today's home OKC was away → batch uses -home_net_ortg
+        assert _matchup_home_net_ortg(row, "OKC") == -10.0
+
+    def test_missing_ortg_returns_none(self):
+        row = pd.Series({"home_team": "OKC", "home_ortg": np.nan, "home_drtg": 110.0})
+        assert _matchup_home_net_ortg(row, "OKC") is None
+
+
+class TestSanitizeFeatures:
+    def test_fills_matchup_nan(self):
+        out = _sanitize_features({
+            "matchup_net_ortg_last5": np.nan,
+            "matchup_home_wins_last5": np.nan,
+            "home_elo": 1500.0,
+        })
+        assert out["matchup_net_ortg_last5"] == 0.0
+        assert out["matchup_home_wins_last5"] == 0.5
+        assert out["home_elo"] == 1500.0
 
 
 class TestProbToMinDecimal:
