@@ -31,7 +31,11 @@ logger = logging.getLogger("seed_odds")
 
 KEY = os.getenv("ODDS_API_KEY")
 BASE = "https://api.odds-api.io/v3"
-BOOKMAKERS = os.getenv("BOOKMAKERS", "Superbet,Stake").split(",")
+BOOKMAKERS = [
+    b.strip()
+    for b in os.getenv("BOOKMAKERS", "Superbet,Stake").split(",")
+    if b.strip()
+]
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 TEAM_MAP = {
@@ -86,7 +90,7 @@ def extract_ml(markets):
 
 def derive_season(game_date: date) -> str:
     y = game_date.year
-    return f"{y}-{str(y+1)[-2:]}" if y >= 10 else f"{y-1}-{str(y)[-2:]}"
+    return f"{y}-{str(y+1)[-2:]}" if game_date.month >= 10 else f"{y-1}-{str(y)[-2:]}"
 
 
 def game_id_from_event(eid: str) -> str:
@@ -214,7 +218,19 @@ def seed_historical_odds(session):
 def seed_current_odds(session):
     """Fetch current NBA events and their odds, store in DB."""
     logger.info("Fetching current NBA events...")
-    events_data = api_get("events", {"sport": "basketball", "limit": 100})
+    today = date.today()
+    from_iso = (today - timedelta(days=1)).isoformat() + "T00:00:00Z"
+    to_iso = (today + timedelta(days=21)).isoformat() + "T23:59:59Z"
+    events_data = api_get(
+        "events",
+        {
+            "sport": "basketball",
+            "league": "usa-nba",
+            "from": from_iso,
+            "to": to_iso,
+            "limit": 200,
+        },
+    )
     if not events_data:
         logger.warning("No current events")
         return 0, 0
@@ -296,6 +312,14 @@ def seed_current_odds(session):
                     {"gid": gid, "bm": bm, "ho": ho, "ao": ao}
                 )
                 total_odds += 1
+            else:
+                session.execute(
+                    text(
+                        "UPDATE odds SET home_win_odds = :ho, away_win_odds = :ao "
+                        "WHERE game_id = :gid AND bookmaker = :bm"
+                    ),
+                    {"gid": gid, "bm": bm, "ho": ho, "ao": ao},
+                )
 
     session.commit()
     logger.info(f"Current odds done. Games: {total_games}, Odds: {total_odds}, API calls: {req_used}")

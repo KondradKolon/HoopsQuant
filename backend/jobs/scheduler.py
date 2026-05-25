@@ -6,7 +6,6 @@ Runs all background jobs on a schedule
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.executors.pool import ThreadPoolExecutor
 import logging
-from datetime import datetime
 
 # Setup logging
 logging.basicConfig(
@@ -17,8 +16,7 @@ logger = logging.getLogger("scheduler")
 
 # Import job functions
 from jobs.nba_fetcher_2026 import main as fetch_nba_2026
-from jobs.odds_fetcher import run_odds_pipeline
-from jobs.fetch_current_odds import fetch_and_store as fetch_current_odds
+from jobs.odds_schedule import scheduled_nba_odds_pipeline, scheduled_current_odds
 from jobs.generate_predictions import main as generate_predictions
 from jobs.odds_tracker import track_odds
 
@@ -50,32 +48,28 @@ def start_scheduler():
         )
         logger.info("📅 Scheduled: NBA games fetch at 03:00 UTC")
         
-        # Odds - fetch every 2 hours
+        # NBA odds pipeline — every 2 hours (rolling date window, see odds_schedule.py)
         scheduler.add_job(
-            run_odds_pipeline,
+            scheduled_nba_odds_pipeline,
             'cron',
             hour='*/2',
+            minute=15,
             id='fetch_odds',
-            name='Fetch Odds',
-            misfire_grace_time=600,  # 10 minutes grace period
-            kwargs={
-                'start_iso': datetime.now().date().isoformat(),
-                'end_iso': datetime.now().date().isoformat(),
-                'max_games': 50
-            }
+            name='Fetch NBA Odds Pipeline',
+            misfire_grace_time=600,
         )
-        logger.info("📅 Scheduled: Odds fetch every 2 hours")
+        logger.info("📅 Scheduled: NBA odds pipeline every 2 hours (at :15)")
         
-        # Current/live odds - every hour (catches new events and odds movements)
+        # Current/live odds — every hour via /odds/multi (NBA-filtered)
         scheduler.add_job(
-            fetch_current_odds,
+            scheduled_current_odds,
             'cron',
-            minute='0',
+            minute='5',
             id='fetch_current_odds',
             name='Fetch Current Odds',
-            misfire_grace_time=300
+            misfire_grace_time=300,
         )
-        logger.info("📅 Scheduled: Current odds fetch every hour")
+        logger.info("📅 Scheduled: Current NBA odds every hour (at :05)")
 
         # Odds history tracking - every 30 minutes (for sharp detection)
         scheduler.add_job(
@@ -109,14 +103,8 @@ def start_scheduler():
             logger.info("🌱 Running initial seed (background)...")
             try:
                 # Fetch odds for all 4 rounds (past 90 days) + current odds
-                from scripts.seed_odds_to_supabase import seed_historical_odds, seed_current_odds
-                from app.db.database import SessionLocal
-                db = SessionLocal()
-                try:
-                    seed_historical_odds(db)
-                    seed_current_odds(db)
-                finally:
-                    db.close()
+                scheduled_current_odds()
+                scheduled_nba_odds_pipeline()
                 generate_predictions()
                 track_odds()
                 logger.info("🌱 Initial seed complete")

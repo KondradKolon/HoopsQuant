@@ -196,7 +196,13 @@ def fetch_odds_for_game(event_id: str, bookmakers: Optional[List[str]] = None) -
         return {}
 
 
-def run_odds_pipeline(start_iso: str, end_iso: str, max_games: int = 50, sleep_sec: float = 0.5):
+def run_odds_pipeline(
+    start_iso: str,
+    end_iso: str,
+    max_games: int = 50,
+    sleep_sec: float = 0.5,
+    refresh_existing: bool = False,
+):
     """
     Main pipeline to fetch and store odds
     
@@ -278,54 +284,62 @@ def run_odds_pipeline(start_iso: str, end_iso: str, max_games: int = 50, sleep_s
                 game_id = game_in_db.game_id
                 logger.info(f"  → Found game in DB: {game_id}")
                 
-                # Step 4: Check what odds we already have
-                existing_bookmakers = {
-                    row[0]
-                    for row in db.query(Odds.bookmaker)
-                    .filter(Odds.game_id == game_id)
-                    .all()
+                # Step 4: Decide which bookmakers to request
+                existing_rows = {
+                    row.bookmaker: row
+                    for row in db.query(Odds).filter(Odds.game_id == game_id).all()
                 }
-                missing_bookmakers = [bm for bm in POLISH_BOOKMAKERS if bm not in existing_bookmakers]
-                
-                if not missing_bookmakers:
-                    logger.info(f"  → Odds already complete for all bookmakers")
-                    time.sleep(sleep_sec)
-                    continue
-                
-                logger.info(f"  → Fetching odds from: {missing_bookmakers}")
-                
+                if refresh_existing:
+                    bookmakers_to_fetch = list(POLISH_BOOKMAKERS)
+                else:
+                    bookmakers_to_fetch = [
+                        bm for bm in POLISH_BOOKMAKERS if bm not in existing_rows
+                    ]
+                    if not bookmakers_to_fetch:
+                        logger.info("  → Odds already complete for all bookmakers (refresh_existing=False)")
+                        time.sleep(sleep_sec)
+                        continue
+
+                logger.info(f"  → Fetching odds from: {bookmakers_to_fetch}")
+
                 # Step 5: Fetch odds from API
-                raw_odds_data = fetch_odds_for_game(odds_event_id, bookmakers=missing_bookmakers)
+                raw_odds_data = fetch_odds_for_game(odds_event_id, bookmakers=bookmakers_to_fetch)
                 all_markets = raw_odds_data.get("bookmakers", {})
-                
-                # Step 6: Extract and save odds
+
+                # Step 6: Extract and save or update odds
                 saved_count = 0
-                for bookmaker in missing_bookmakers:
+                updated_count = 0
+                for bookmaker in bookmakers_to_fetch:
                     clean_odds = extract_moneyline_odds(bookmaker, all_markets)
-                    
+
                     if clean_odds["home"] is None or clean_odds["away"] is None:
                         logger.warning(f"  → No moneyline found for {bookmaker}")
                         continue
-                    
-                    # Check if odds already exist
-                    existing = db.query(Odds).filter(
-                        Odds.game_id == game_id,
-                        Odds.bookmaker == bookmaker
-                    ).first()
-                    
+
+                    existing = existing_rows.get(bookmaker)
                     if not existing:
-                        new_odds = Odds(
-                            game_id=game_id,
-                            bookmaker=bookmaker,
-                            home_win_odds=clean_odds["home"],
-                            away_win_odds=clean_odds["away"]
+                        db.add(
+                            Odds(
+                                game_id=game_id,
+                                bookmaker=bookmaker,
+                                home_win_odds=clean_odds["home"],
+                                away_win_odds=clean_odds["away"],
+                            )
                         )
-                        db.add(new_odds)
                         saved_count += 1
-                
-                if saved_count > 0:
+                    elif (
+                        existing.home_win_odds != clean_odds["home"]
+                        or existing.away_win_odds != clean_odds["away"]
+                    ):
+                        existing.home_win_odds = clean_odds["home"]
+                        existing.away_win_odds = clean_odds["away"]
+                        updated_count += 1
+
+                if saved_count > 0 or updated_count > 0:
                     db.commit()
-                    logger.info(f"  → Saved {saved_count} odds entries")
+                    logger.info(
+                        f"  → Saved {saved_count} new, updated {updated_count} odds entries"
+                    )
                 else:
                     db.rollback()
                 
