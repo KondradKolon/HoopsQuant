@@ -8,6 +8,7 @@ from app.db import models
 from app.config import ALLOWED_ORIGINS
 from app.api.routes import games, arbitrage, watchlist, dashboard
 from app.api.routes.elo import router as elo_router
+from app.api.routes.odds_status import router as odds_status_router
 from jobs.scheduler import start_scheduler, stop_scheduler
 import logging
 import time
@@ -78,6 +79,7 @@ app.include_router(arbitrage.router)
 app.include_router(watchlist.router)
 app.include_router(dashboard.router)
 app.include_router(elo_router)
+app.include_router(odds_status_router)
 
 
 # Scheduler startup and shutdown hooks

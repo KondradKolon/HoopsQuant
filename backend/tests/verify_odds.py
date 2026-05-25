@@ -14,8 +14,17 @@ from datetime import date, datetime
 
 from sqlalchemy.orm import joinedload
 
-from database import SessionLocal
-from models import Game
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+
+from app.db.database import SessionLocal
+from app.db.models import Game
 
 
 def _parse_date(value: str) -> date:
