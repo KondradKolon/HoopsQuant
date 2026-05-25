@@ -23,10 +23,6 @@ def get_team_elo_history(df, team_name):
     team_history = pd.concat([home_games, away_games]).sort_values("game_date")
     return team_history
 
-# ==========================================
-# TUTAJ WPISZ SKRÓTY DRUŻYN, KTÓRE CHCESZ ZOBACZYĆ
-# (Zmień na takie, jakie masz w swojej bazie, np. "BOS", "LAL" dla NBA)
-# ==========================================
 TEAMS_TO_PLOT = ["BOS", "LAL", "GSW", "DET","OKC","HUE","SAS","IND","MIL"] 
 
 # Ustawienia wykresu

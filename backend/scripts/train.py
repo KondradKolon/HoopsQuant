@@ -29,7 +29,7 @@ from xgboost import XGBClassifier
 
 def main():
     parser = argparse.ArgumentParser(description="Trenowanie modelu z opcjonalnym odcięciem daty.")
-    parser.add_argument("--train-end", default="2025-12-31", help="Ostatni dzień danych do finalnego treningu (YYYY-MM-DD)")
+    parser.add_argument("--train-end", default="2026-05-25", help="Ostatni dzień danych do finalnego treningu (YYYY-MM-DD). Dla cross-season użyj 2025-10-01.")
     args = parser.parse_args()
 
     print("[TRAIN] Wczytywanie features.csv...")
@@ -47,6 +47,7 @@ def main():
     FEATURE_COLS = (
         [col for col in df.columns if col.endswith("_last10")]
         + ["home_elo", "away_elo", "elo_diff"]
+        + ["matchup_home_wins_last5", "matchup_pts_diff_last5", "matchup_net_ortg_last5"]
     )
 
     TARGET_COL = "label"
@@ -64,10 +65,8 @@ def main():
     # NIE używamy shuffle=True — to dałoby look-ahead bias!
 
     SPLITS = [
-        # Fold 1: Trenujemy na 22/23, Testujemy na 23/24
-        {"train_start": "2022-09-01", "train_end": "2023-09-01", "test_end": "2024-09-01"},
-        # Fold 2: Trenujemy na 23/24, Testujemy na 24/25
-        {"train_start": "2023-09-01", "train_end": "2024-09-01", "test_end": "2025-06-01"},
+        # Cross-season: Trenujemy na całym 2024-25, Testujemy na 2025-26
+        {"train_start": "2024-10-01", "train_end": "2025-10-01", "test_end": "2026-06-01"},
     ]
 
     # ─────────────────────────────────────────────────────────────────────────────
@@ -166,7 +165,7 @@ def main():
     best_name = summary_df["Brier ↓"].idxmin()
     best_base_model = models_to_test[best_name]
     
-    print(f"\n✅ Najlepszy model: {best_name} (Brier: {summary_df.loc[best_name, 'Brier ↓']:.4f})")
+    print(f"\nNajlepszy model: {best_name} (Brier: {summary_df.loc[best_name, 'Brier ↓']:.4f})")
 
     # ─────────────────────────────────────────────────────────────────────────────
     # KROK 5: TRENOWANIE FINALNEGO MODELU PRODUKCYJNEGO
@@ -217,11 +216,11 @@ def main():
     joblib.dump(final_scaler, "scaler.pkl")
     joblib.dump(FEATURE_COLS, "feature_cols.pkl")
 
-    print(f"\n✅ [TRAIN] Zapisano pliki modelu:")
+    print(f"\n [TRAIN] Zapisano pliki modelu:")
     print(f"   model.pkl       — {best_name} (skalibrowany)")
     print(f"   scaler.pkl      — StandardScaler")
     print(f"   feature_cols.pkl — {len(FEATURE_COLS)} cech")
-    print(f"\n💡 Model NIE WIDZIAŁ meczów po: {args.train_end}")
+    print(f"\nModel NIE WIDZIAŁ meczów po: {args.train_end}")
 
 
 if __name__ == "__main__":

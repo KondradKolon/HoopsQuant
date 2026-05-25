@@ -164,7 +164,7 @@ all_games = calculate_rest_days(all_games)
 
 print("[FEAT] Obliczanie Elo ratings z regresją do średniej i Margin of Victory (MoV)...")
 
-K = 20
+K = 30
 HOME_ADVANTAGE = 50
 MEAN_ELO = 1500.0
 REGRESSION_FACTOR = 0.80  # 80% carryover z poprzedniego sezonu, 20% resetu do 1500
@@ -173,6 +173,12 @@ elo_ratings: dict[str, float] = {}
 
 home_elos = []
 away_elos = []
+
+# H2H matchup tracking: key = sorted pair "BOS|MIL", value = list of dicts
+matchup_history: dict[str, list[dict]] = {}
+matchup_home_wins = []
+matchup_pts_diff = []
+matchup_net_ortg = []
 
 current_season = None
 
@@ -194,46 +200,102 @@ for row in all_games.itertuples():
     home_elos.append(home_elo)
     away_elos.append(away_elo)
 
-    # 3. Prawdopodobieństwo wygranej (na bazie Elo diff)
-    elo_diff = home_elo + HOME_ADVANTAGE - away_elo
-    p_home = 1 / (1 + 10 ** (-elo_diff / 400))
+    # ── H2H matchup stats (before updating history) ──────────────
+    pair_key = "|".join(sorted([home, away]))
+    past = matchup_history.get(pair_key, [])
+    # Only games that happened before this one
+    past_before = [g for g in past if g["game_date"] < row.game_date]
+    recent = past_before[-5:]
 
-    # ==========================================
-    # 4. MARGIN OF VICTORY (MoV) MULTIPLIER
-    # ==========================================
-    score_diff = abs(row.home_score - row.away_score)
-    
-    # Kto był faworytem, a kto underdogiem w oczach Elo?
-    if row.home_team_wins == 1.0:
-        winner_elo = home_elo + HOME_ADVANTAGE
-        loser_elo = away_elo
+    if len(recent) >= 1:
+        match_home_wins = sum(
+            1 for g in recent
+            if (g["home_team"] == home and g["home_won"])
+            or (g["away_team"] == home and not g["home_won"])
+        )
+        match_pts_diff = sum(
+            (g["home_score"] - g["away_score"])
+            if g["home_team"] == home
+            else (g["away_score"] - g["home_score"])
+            for g in recent
+        ) / len(recent)
+        match_net_ortg = sum(
+            g["home_net_ortg"] if g["home_team"] == home else -g["home_net_ortg"]
+            for g in recent
+        ) / len(recent)
     else:
-        winner_elo = away_elo
-        loser_elo = home_elo + HOME_ADVANTAGE
+        match_home_wins = 0.5  # neutral
+        match_pts_diff = 0.0
+        match_net_ortg = 0.0
+
+    matchup_home_wins.append(match_home_wins)
+    matchup_pts_diff.append(match_pts_diff)
+    matchup_net_ortg.append(match_net_ortg)
+
+    # 3. Aktualizacja Elo (tylko dla zakończonych meczów)
+    has_score = not pd.isna(row.home_score) and not pd.isna(row.away_score)
+    if has_score:
+        home_won = row.home_team_wins == 1.0
         
-    elo_diff_winner = winner_elo - loser_elo
-    
-    # Klasyczny mnożnik MoV dla koszykówki 
-    # (zabezpieczenie przed ujemnym mianownikiem przy ogromnych upsetach)
-    mov_multiplier = ((score_diff + 3) ** 0.8) / (7.5 + 0.006 * elo_diff_winner)
-    # ==========================================
+        # Prawdopodobieństwo wygranej (na bazie Elo diff)
+        elo_diff = home_elo + HOME_ADVANTAGE - away_elo
+        p_home = 1 / (1 + 10 ** (-elo_diff / 400))
 
-    # 5. Aktualizacja po meczu (z uwzględnieniem mnożnika!)
-    if row.home_team_wins == 1.0:
-        shift = K * mov_multiplier * (1 - p_home)
-    else:
-        shift = -K * mov_multiplier * p_home 
+        # MoV multiplier
+        score_diff = abs(row.home_score - row.away_score)
+        
+        if home_won:
+            winner_elo = home_elo + HOME_ADVANTAGE
+            loser_elo = away_elo
+        else:
+            winner_elo = away_elo
+            loser_elo = home_elo + HOME_ADVANTAGE
+            
+        elo_diff_winner = winner_elo - loser_elo
+        mov_multiplier = ((score_diff + 3) ** 0.8) / (7.5 + 0.006 * elo_diff_winner)
 
-    elo_ratings[home] = home_elo + shift
-    elo_ratings[away] = away_elo - shift
+        # Aktualizacja
+        if home_won:
+            shift = K * mov_multiplier * (1 - p_home)
+        else:
+            shift = -K * mov_multiplier * p_home 
+
+        elo_ratings[home] = home_elo + shift
+        elo_ratings[away] = away_elo - shift
+
+        # Record H2H data for future matchups
+        matchup_history.setdefault(pair_key, []).append({
+            "game_date": row.game_date,
+            "home_team": row.home_team,
+            "away_team": row.away_team,
+            "home_won": float(row.home_team_wins),
+            "home_score": float(row.home_score),
+            "away_score": float(row.away_score),
+            "home_net_ortg": float(getattr(row, "home_ortg", 0) - getattr(row, "home_drtg", 0)),
+        })
 
 # Przypisanie do DataFrame
 all_games["home_elo"] = home_elos
 all_games["away_elo"] = away_elos
 all_games["elo_diff"] = all_games["home_elo"] - all_games["away_elo"]
 
+all_games["matchup_home_wins_last5"] = matchup_home_wins
+all_games["matchup_pts_diff_last5"] = matchup_pts_diff
+all_games["matchup_net_ortg_last5"] = matchup_net_ortg
+
 all_games["elo_win_prob"] = 1 / (
     1 + 10 ** (-(all_games["home_elo"] + HOME_ADVANTAGE - all_games["away_elo"]) / 400)
+)
+
+# Is_playoff flag
+PLAYOFF_START = {
+    "2023-24": "2024-04-16",
+    "2024-25": "2025-04-15",
+    "2025-26": "2026-04-15",
+}
+all_games["is_playoff"] = all_games.apply(
+    lambda row: float(row.game_date >= pd.Timestamp(PLAYOFF_START.get(str(row.season), "2099-01-01"))),
+    axis=1
 )
 
 print("[FEAT] Obliczanie matchup features...")
@@ -249,6 +311,7 @@ output_file = "features.csv"
 all_games.to_csv(output_file, index=False)
 
 form_columns = [col for col in all_games.columns if "last" in col]
+h2h_columns = [col for col in all_games.columns if "matchup_" in col and "_last5" in col]
 adv_columns  = [col for col in all_games.columns if any(
     x in col for x in ["ortg", "drtg", "efg", "ts_", "elo", "matchup", "b2b"]
 )]
@@ -256,6 +319,7 @@ adv_columns  = [col for col in all_games.columns if any(
 print(f"\n[FEAT] Zapis do {output_file}")
 print(f"       Łącznie: {len(all_games)} meczów × {all_games.shape[1]} kolumn")
 print(f"       Kolumny z formą ({len(form_columns)} szt.): {form_columns[:4]} ...")
+print(f"       H2H matchup ({len(h2h_columns)} szt.): {h2h_columns}")
 print(f"       Advanced stats ({len(adv_columns)} szt.): {adv_columns[:6]} ...")
 print(f"       Gospodarz wygrał: {all_games['label'].mean():.1%} meczów")
 print(f"       Elo diff (mean): {all_games['elo_diff'].mean():.1f}  std: {all_games['elo_diff'].std():.1f}")
